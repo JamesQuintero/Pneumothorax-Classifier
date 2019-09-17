@@ -2,6 +2,7 @@ import glob #for loading DICOM files from disk
 import pydicom #for reading DICOM files
 import matplotlib.pyplot as plt #for displaying DICOM files
 import pandas as pd #for reading data files
+import os
 
 from mask_functions import rle2mask
 
@@ -21,32 +22,35 @@ class DICOMReader:
 
     data_handler = None
 
+    #path variables
+    dicom_train_path = "./data/dicom-images-train/*/*/*.dcm"
+
     def __init__(self):
         self.data_handler = DataHandler()
 
 
-    def show_dcm_info(self, dataset):
+    #prints metadata of dicom file
+    def print_dcm_info(self, dicom_obj):
         # print("Filename.........:", file_path)
-        print("Storage type.....:", dataset.SOPClassUID)
+        print("Storage type.....:", dicom_obj.SOPClassUID)
         # print()
 
-        pat_name = dataset.PatientName
+        pat_name = dicom_obj.PatientName
         display_name = pat_name.family_name + ", " + pat_name.given_name
         print("Patient's name......:", display_name)
-        print("Patient id..........:", dataset.PatientID)
-        print("Patient's Age.......:", dataset.PatientAge)
-        print("Patient's Sex.......:", dataset.PatientSex)
-        print("Modality............:", dataset.Modality)
-        print("Body Part Examined..:", dataset.BodyPartExamined)
-        print("View Position.......:", dataset.ViewPosition)
+        print("Patient id..........:", dicom_obj.PatientID)
+        print("Patient's Age.......:", dicom_obj.PatientAge)
+        print("Patient's Sex.......:", dicom_obj.PatientSex)
+        print("Modality............:", dicom_obj.Modality)
+        print("Body Part Examined..:", dicom_obj.BodyPartExamined)
+        print("View Position.......:", dicom_obj.ViewPosition)
         
-        if 'PixelData' in dataset:
-            rows = int(dataset.Rows)
-            cols = int(dataset.Columns)
-            print("Image size.......: {rows:d} x {cols:d}, {size:d} bytes".format(
-                rows=rows, cols=cols, size=len(dataset.PixelData)))
-            if 'PixelSpacing' in dataset:
-                print("Pixel spacing....:", dataset.PixelSpacing)
+        if 'PixelData' in dicom_obj:
+            rows = int(dicom_obj.Rows)
+            cols = int(dicom_obj.Columns)
+            print("Image size.......: {rows:d} x {cols:d}, {size:d} bytes".format(rows=rows, cols=cols, size=len(dicom_obj.PixelData)))
+            if 'PixelSpacing' in dicom_obj:
+                print("Pixel spacing....:", dicom_obj.PixelSpacing)
 
     def plot_pixel_array(dataset, figsize=(10,10)):
         plt.figure(figsize=figsize)
@@ -135,6 +139,53 @@ class DICOMReader:
 
         #displays everything
         plt.show()
+
+
+
+    #plots dicom_pixels and mask_pixels
+    #dicom_pixels is a pixel_array
+    def plot_dicom(self, dicom_pixels, mask_pixels):
+        
+        plt.figure(figsize=(10,10))
+
+        #displays the body scan
+        plt.imshow(dicom_pixels, cmap=plt.cm.bone)
+
+        plt.set_title('See Marker')
+
+        #displays the masks if there are any
+        plt.imshow(mask_pixels, alpha=0.3, cmap="Reds")
+
+        #displays everything
+        plt.show()
+
+
+    #returns list of globs that are the dicom training files
+    def load_dicom_train_paths(self):
+        try:
+            train_fns = glob.glob(self.dicom_train_path)
+        except Exception as error:
+            print("load_dicom_train_objects() error: "+str(error))
+            return []
+
+        return train_fns
+
+
+    #returns dicom object stored at path
+    def get_dicom_obj(self, path):
+
+        #if the file doesn't exist, return None
+        if os.path.isfile(path)==False:
+            return None
+
+        try:
+            # dataset = pydicom.read_file(path)
+            dataset = pydicom.dcmread(path)
+            return dataset
+        except Exception as error:
+            print("get_dicom_obj() error: "+str(error))
+            return None
+
 
 
 
