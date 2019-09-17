@@ -1,5 +1,6 @@
 from DICOM_reader import DICOMReader
 from DataHandler import DataHandler
+from ImagePreprocessor import ImagePreprocessor
 
 from mask_functions import rle2mask
 
@@ -37,10 +38,12 @@ class CNNClassifier:
 
     dicom_reader = None
     data_handler = None
+    image_preprocessor = None
 
     def __init__(self):
         self.dicom_reader = DICOMReader()
         self.data_handler = DataHandler()
+        self.image_preprocessor = ImagePreprocessor()
 
     #returns 1024x1024 raw pixel data of feature dicom images
     # feature images will have pixel intensities
@@ -84,6 +87,8 @@ class CNNClassifier:
             #extracts image_id from the file path
             image_id = image_path.split('\\')[-1].replace(".dcm", "")
             print("Image id: "+str(image_id))
+
+            # print("Shape: "+str(dicom_image.pixel_array.shape))
 
             # #apply dicom pixels
             X_train[i] = np.expand_dims(dicom_image.pixel_array, axis=2)
@@ -129,52 +134,6 @@ class CNNClassifier:
 
 
         return X_train, Y_train
-
-
-    #normalized based off train data, then applies to validate and test data
-    #returns 4-tuple of normalized train, validate, and test, and scaler object for saving
-    def normalize_data(self, train, validate, test, scaler_type="standard_scaler"):
-
-        #if normalizing to fit a distribution curve
-        if scaler_type.lower() == "standard_scaler":
-            scaler = StandardScaler()
-        #if normalizing to be between 0 and 1
-        elif scaler_type.lower() == "0_1_scaler":
-            scaler = MinMaxScaler(feature_range=(0,1))
-
-
-        # print()
-        # print(train)
-        # print()
-        # print(train[0])
-        # print()
-        # print(train[0][0])
-        # print()
-        # print(train[0][0][0])
-        # print()
-        # print(train[0][0][0][0])
-
-        # print(train.shape)
-
-
-        #https://stackoverflow.com/questions/50125844/how-to-standard-scale-a-3d-matrix
-
-        # #fits scalar to training data
-        # for x in range(0, len(train)):
-        #     fit_concat_training = scaler.fit(train[x])
-
-
-
-
-
-        train_normalized = train/255
-        validate_normalized = validate/255
-        test_normalized = test/255
-
-
-
-        return train_normalized, validate_normalized, test_normalized, scaler
-
 
     #just to make sure a series of data isn't related to each other and mistraining the model
     def randomize_data(self):
@@ -279,53 +238,61 @@ class CNNClassifier:
         # Initialising the CNN
         classifier = Sequential()
 
-        classifier.add(Convolution2D(32, (3, 3), input_shape = (self.image_width, self.image_height, 1), activation = 'relu'))
+        CNN_size = 16
+        pool_size = (3,3)
+        CNN_activation = "relu"
+        dense_activation = "relu"
+        output_activation = "sigmoid"
+
+        classifier.add(Convolution2D(CNN_size, (3, 3), input_shape = (self.image_width, self.image_height, 1), activation = CNN_activation))
 
         # Step 2 - Pooling
         #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
         #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
-        classifier.add(MaxPooling2D(pool_size = (2, 2), strides=(2,2)))
+        classifier.add(MaxPooling2D(pool_size = pool_size))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(32, (3, 3), activation = 'relu'))
-        classifier.add(MaxPooling2D(pool_size = (2, 2), strides=(2,2)))
+        classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        classifier.add(MaxPooling2D(pool_size = pool_size))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(32, (3, 3), activation = 'relu'))
-        classifier.add(MaxPooling2D(pool_size = (2, 2), strides=(2,2)))
+        classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        classifier.add(MaxPooling2D(pool_size = pool_size))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(32, (3, 3), activation = 'relu'))
-        classifier.add(MaxPooling2D(pool_size = (2, 2), strides=(2,2)))
+        classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        classifier.add(MaxPooling2D(pool_size = pool_size))
         classifier.add(Dropout(0.25))
 
-        # Adding a second convolutional layer
-        classifier.add(Convolution2D(32, (3, 3), activation = 'relu'))
-        classifier.add(MaxPooling2D(pool_size = (2, 2), strides=(2,2)))
-        classifier.add(Dropout(0.25))
+        # # Adding a second convolutional layer
+        # classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        # classifier.add(MaxPooling2D(pool_size = pool_size))
+        # classifier.add(Dropout(0.25))
 
-        # Adding a second convolutional layer
-        classifier.add(Convolution2D(32, (3, 3), activation = 'relu'))
-        classifier.add(MaxPooling2D(pool_size = (2, 2), strides=(2,2)))
-        classifier.add(Dropout(0.25))
+        # # Adding a second convolutional layer
+        # classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        # classifier.add(MaxPooling2D(pool_size = pool_size))
+        # classifier.add(Dropout(0.25))
 
         #flattents the layers
         classifier.add(Flatten())
 
         #128 is an arbitrary number that can be decreased to lower computation time, and increased for better accuracy
-        classifier.add(Dense(units = 128, activation = "relu"))
+        classifier.add(Dense(units = 128, activation = dense_activation))
         classifier.add(Dropout(0.25))
 
-        classifier.add(Dense(units = 1, activation = "sigmoid"))
+        classifier.add(Dense(units = 1, activation = output_activation))
 
-        classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+        classifier.compile(optimizer = 'rmsprop', loss = 'binary_crossentropy', metrics = ['accuracy'])
 
         classifier.summary()
 
         return classifier
+
+
 
     #trains CNN
     def train(self):
@@ -339,15 +306,29 @@ class CNNClassifier:
         # print("Num labels: "+str(len(labels)))
 
 
-        max_images = 100
+        max_images = 5
         X, Y = self.get_unprocessed_feature_target_images(max_images)
 
+        dcm_image = X[0]
+
+        #reshapes for display
+        dcm_image = np.squeeze(dcm_image, axis=2)
+        # self.dicom_reader.plot_pixel_array(dcm_image)
+
+        # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
+        dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image)
+        # dcm_image = np.squeeze(dcm_image, axis=2)
+        self.dicom_reader.plot_pixel_array(dcm_image)
+
+
+        return
 
 
 
 
-        train_ratio = 0.5
-        validation_ratio = 0.5
+
+        train_ratio = 0.7
+        validation_ratio = 0.2
         X_train, X_validate, X_test = self.data_handler.split_data(X, train_ratio, validation_ratio)
         Y_train, Y_validate, Y_test = self.data_handler.split_data(Y, train_ratio, validation_ratio)
         # for label in labels:
@@ -364,7 +345,7 @@ class CNNClassifier:
 
 
 
-        X_train_normalized, X_validate_normalized, X_test_normalized, X_normalization_params = self.normalize_data(X_train, X_validate, X_test)
+        X_train_normalized, X_validate_normalized, X_test_normalized, X_normalization_params = self.image_preprocessor.normalize_data(X_train, X_validate, X_test)
 
         #Y is already normalized
         # Y_train_normalized, Y_validate_normalized, Y_test_normalized, Y_normalization_params = self.normalize_data(Y_train, Y_validate, Y_test)
@@ -409,13 +390,31 @@ class CNNClassifier:
         # classifier.fit_generator(X_train_new_images, steps_per_epoch=len(X_train_new_images) / 32, epochs=epochs)
 
 
+        ### Should really perform data augmentation ###
+
 
         #trains
-        batch_size = 5
+        batch_size = 10
         epochs = 3
         classifier.fit(X_train_normalized, Y_train,
                        batch_size=batch_size,
                        epochs=epochs)
+
+
+        ## Plot training history ##
+        # # plot the training loss and accuracy
+        # plt.style.use("ggplot")
+        # plt.figure()
+        # N = EPOCHS
+        # plt.plot(np.arange(0, N), H.history["loss"], label="train_loss")
+        # plt.plot(np.arange(0, N), H.history["val_loss"], label="val_loss")
+        # plt.plot(np.arange(0, N), H.history["acc"], label="train_acc")
+        # plt.plot(np.arange(0, N), H.history["val_acc"], label="val_acc")
+        # plt.title("Training Loss and Accuracy on Santa/Not Santa")
+        # plt.xlabel("Epoch #")
+        # plt.ylabel("Loss/Accuracy")
+        # plt.legend(loc="lower left")
+        # plt.savefig(args["plot"])
 
 
 
@@ -432,8 +431,8 @@ class CNNClassifier:
         y_validate_non_category = Y_validate
         y_predict_non_category = [ t>0.5 for t in preds]
 
-        print(y_validate_non_category)
-        print(preds)
+        print(y_validate_non_category[:10])
+        print(preds[:10])
         # print(y_predict_non_category)
 
         #calculates confusion matrix

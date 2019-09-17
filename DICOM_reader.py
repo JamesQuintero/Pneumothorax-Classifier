@@ -52,14 +52,15 @@ class DICOMReader:
             if 'PixelSpacing' in dicom_obj:
                 print("Pixel spacing....:", dicom_obj.PixelSpacing)
 
-    def plot_pixel_array(dataset, figsize=(10,10)):
+    #image should already by a 2D list of single value for grayscale
+    def plot_pixel_array(self, image, figsize=(10,10)):
         plt.figure(figsize=figsize)
-        plt.imshow(dataset.pixel_array, cmap=plt.cm.bone)
+        plt.imshow(image, cmap=plt.cm.bone)
         plt.show()
 
 
     #plots many of the DICOM images at once
-    def plot_many_images():
+    def plot_many_images(self):
         start = 5   # Starting index of images
         num_img = 4 # Total number of images to show
 
