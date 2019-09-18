@@ -24,6 +24,7 @@ class DICOMReader:
 
     #path variables
     dicom_train_path = "./data/dicom-images-train/*/*/*.dcm"
+    dicom_filtered_train_path = "./data/dicom-images-train-filtered/*.dcm"
 
     def __init__(self):
         self.data_handler = DataHandler()
@@ -161,10 +162,20 @@ class DICOMReader:
         plt.show()
 
 
-    #returns list of globs that are the dicom training files
+    #returns list of paths that point to dicom training images
     def load_dicom_train_paths(self):
         try:
             train_fns = glob.glob(self.dicom_train_path)
+        except Exception as error:
+            print("load_dicom_train_objects() error: "+str(error))
+            return []
+
+        return train_fns
+
+    #rerturns list of paths that point to filtered training images
+    def load_filtered_dicom_train_paths(self):
+        try:
+            train_fns = glob.glob(self.dicom_filtered_train_path)
         except Exception as error:
             print("load_dicom_train_objects() error: "+str(error))
             return []

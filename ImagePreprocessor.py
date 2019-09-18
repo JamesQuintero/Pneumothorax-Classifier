@@ -11,6 +11,7 @@ from scipy.ndimage.filters import convolve
 from scipy import misc
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
+import cv2 #py -3 -m pip install opencv-python
 
 """
 
@@ -76,17 +77,13 @@ class ImagePreprocessor:
         return train_normalized, validate_normalized, test_normalized, scaler
 
     #applies gaussian blur to the provided image, and returns it
-    def apply_gaussian_blur(self, image):
+    def apply_gaussian_blur(self, image, kernel_size=5, sigma=1):
         #cuts down image
         was_expanded = False
         if len(image.shape)>=3:
             image = np.squeeze(image, axis=2)
             was_expanded = True
 
-
-
-        kernel_size = 5
-        sigma = 1
 
         image_blurred = convolve(image, self.gaussian_kernel(kernel_size, sigma))
 
@@ -164,12 +161,12 @@ class ImagePreprocessor:
         return Z
 
     #only considers important edges
-    def threshold(self, image):
+    def threshold(self, image, strong_pixel=255, weak_pixel=75, high_threshold=0.15, low_threshold=0.05):
 
-        high_threshold = 0.15
-        low_threshold = 0.05
-        weak_pixel = 75
-        strong_pixel = 255
+        # high_threshold = 0.15
+        # low_threshold = 0.05
+        # weak_pixel = 75
+        # strong_pixel = 255
 
         highThreshold = image.max() * high_threshold;
         lowThreshold = highThreshold * low_threshold;
@@ -190,11 +187,11 @@ class ImagePreprocessor:
 
         return (res)
 
-    def hysteresis(self, img):
+    def hysteresis(self, img, strong_pixel=255, weak_pixel=75):
 
         M, N = img.shape
-        weak = 75
-        strong = 255
+        weak = weak_pixel
+        strong = strong_pixel
 
         for i in range(1, M-1):
             for j in range(1, N-1):
@@ -212,12 +209,30 @@ class ImagePreprocessor:
         return img
 
 
+    #each image is a 2D array of 8-bit values, so account for overflow
+    def subtract_images(self, image1, image2):
+        # result = np.zeros((image1.shape[0], image1.shape[1]), dtype=np.uint8)
+
+        # for x in range(image1.shape[0]):
+        #     for y in range(image1.shape[1]):
+        #         #have to handle overflow
+        #         if image1[x][y]>image2[x][y]:
+        #             result[x][y] = image1[x][y] - image2[x][y]
+        #         else:
+        #             result[x][y] = 0
+
+        # return result
+
+        return cv2.subtract(image1, image2)
+
+
     #applies canny edge detector to the image as the preprocessing step
     #source: https://github.com/FienSoP/canny_edge_detector
-    def canny_edge_detector(self, image):
+    def canny_edge_detector(self, image, kernel_size=5, sigma=1, strong_pixel=255, weak_pixel=75, high_threshold=0.15, low_threshold=0.05):
+
 
         #blurs image
-        image_smoothed = self.apply_gaussian_blur(image)
+        image_smoothed = self.apply_gaussian_blur(image, kernel_size, sigma)
 
         #blackens majority of image and whitens edges
         gradient_matrix, theta_matrix = self.sobel_filters(image_smoothed)
@@ -226,13 +241,55 @@ class ImagePreprocessor:
         non_max_image = self.non_max_suppression(gradient_matrix, theta_matrix)
 
         #only considers important edges
-        threshold_image = self.threshold(non_max_image)
+        threshold_image = self.threshold(non_max_image, strong_pixel, weak_pixel, high_threshold, low_threshold)
 
-        #edge tracking
-        edge_tracking = self.hysteresis(threshold_image)
+        # #edge tracking
+        edge_tracking = self.hysteresis(threshold_image, strong_pixel, weak_pixel)
 
         return edge_tracking
 
+        # return non_max_image
+
+    #reduces noise in an image by blurring
+    def reduce_noise(self, image):
+        try:
+            return cv2.medianBlur(image,5)
+        except:
+            print("Error reducing noise in image.")
+            return image
+
+    #perfdorms filtering on the 2D image
+    def edge_filter(self, image):
+
+        #blurs image for noise reduction
+        blurred = self.reduce_noise(image)
+
+        # strong_pixel = 255 #255 default
+        # weak_pixel = 127 #127 default
+        # ret,threshold1 = cv2.threshold(blurred,weak_pixel,strong_pixel,cv2.THRESH_BINARY)
+
+
+        #gets rid of the distinct white portions
+        threshold1 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21,2)
+        threshold1 = self.reduce_noise(threshold1)
+        #gets rid of smaller white portions
+        threshold2 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11,2)
+        threshold2 = self.reduce_noise(threshold2)
+        #gets rid of thinner white portions
+        threshold3 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 5,2)
+        threshold3 = self.reduce_noise(threshold3)
+
+        result = self.subtract_images(image, threshold1)
+        result = self.subtract_images(result, threshold2)
+        result = self.subtract_images(result, threshold3)
+
+        return result
+
+
+
+    #crops image so that only lungs/ribcage are prominantly displayed. 
+    def crop(self):
+        pass
 
 
 

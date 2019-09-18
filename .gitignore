@@ -9,10 +9,8 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # Temporary python files 
-__pycache__/
 *.py[cod]
 *.pyc
-
 
 #ignores .csv files
 # *.csv

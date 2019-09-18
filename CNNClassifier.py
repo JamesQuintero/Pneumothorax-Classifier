@@ -22,6 +22,8 @@ from keras.models import load_model
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
 
+import cv2
+
 #For my windows machine
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
@@ -134,6 +136,99 @@ class CNNClassifier:
 
 
         return X_train, Y_train
+
+
+
+    def get_processed_feature_target_images(self, max_num=None):
+        image_height = self.image_height
+        image_width = self.image_width
+        image_channels = 1
+
+
+        train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
+
+        #if no max, set max to the number of train items
+        if max_num==None:
+            max_num = len(train_dicom_paths)
+        #limit number of training images to max_num
+        else:
+            train_dicom_paths = train_dicom_paths[:max_num]
+
+
+
+        df_full = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+
+        #initialize feature and target images to zeroes
+        X_train = np.zeros((len(train_dicom_paths), image_height, image_width, image_channels), dtype=np.uint8) #is type 8-bit for pixel intensity values
+        # Y_train = np.zeros((len(train_dicom_paths), image_height, image_width, 1), dtype=np.bool) #is type bool because if pixel is 1, there is mask, 0 otherwise
+        Y_train = np.zeros((len(train_dicom_paths)), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
+
+
+
+        print('Getting train images and masks ... ')
+        sys.stdout.flush() #?
+
+
+        # for n, _id in tqdm_notebook(enumerate(train_dicom_paths), total=len(train_dicom_paths)):
+
+        for i, image_path in enumerate(train_dicom_paths):
+            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
+
+            #extracts image_id from the file path
+            image_id = image_path.split('\\')[-1].replace(".dcm", "")
+            print("Image id: "+str(image_id))
+
+            # print("Shape: "+str(dicom_image.pixel_array.shape))
+
+            # #apply dicom pixels
+            X_train[i] = np.expand_dims(dicom_image.pixel_array, axis=2)
+
+            masks = self.data_handler.find_masks(image_id=image_id, dataset=df_full)
+
+            print("Num masks: "+str(len(masks)))
+            # input()
+            # continue
+
+
+            try:
+                #if no masks for image, then skip
+                if len(masks)==0:
+                    continue
+                else:
+                    # if type(df_full.loc[_id.split('/')[-1][:-4],' EncodedPixels']) == str:
+                    last_mask = masks[-1]
+
+                    ## To do:
+                    ##   Account for all masks found 
+                    ## 
+
+                    #converts to boolean
+                    # Y_train[i] = np.expand_dims(rle2mask(last_mask, image_height, image_width), axis=2)
+
+
+                    Y_train[i] = 1
+
+
+            except KeyError:
+                print("Key {_id.split('/')[-1][:-4]} without mask, assuming healthy patient.")
+                # Y_train[n] = np.zeros((image_height, image_width, 1)) # Assume missing masks are empty masks.
+                Y_train[i] = 0
+
+
+        # #plots the scans and their masks
+        # for x in range(0, len(X_train)):
+        #     self.dicom_reader.plot_dicom(X_train[x], Y_train[x])
+
+        print("X_train size: "+str(len(X_train)))
+        print("Y_train size: "+str(len(Y_train)))
+
+
+        return X_train, Y_train
+
+
+
+
 
     #just to make sure a series of data isn't related to each other and mistraining the model
     def randomize_data(self):
@@ -306,19 +401,91 @@ class CNNClassifier:
         # print("Num labels: "+str(len(labels)))
 
 
-        max_images = 5
-        X, Y = self.get_unprocessed_feature_target_images(max_images)
+        max_images = 200
+        X, Y = self.get_processed_feature_target_images(max_images)
 
-        dcm_image = X[0]
+        # print("Index to use: ")
+        # index = -1
+        # for x in range(0, len(Y)):
+        #     if Y[x]!=0:
+        #         print("Index: "+str(x))
+        #         # index = x
+        #         # break
+        #         dcm_image = np.squeeze(X[x], axis=2)
+        #         self.dicom_reader.plot_pixel_array(dcm_image)
 
-        #reshapes for display
-        dcm_image = np.squeeze(dcm_image, axis=2)
-        # self.dicom_reader.plot_pixel_array(dcm_image)
+        # if index==-1:
+        #     print("No image with mask, increase max_images")
+        #     return
+
+
+
+        # index = 13
+
+        # indices = [14, 18, 28, 29, 35, 36, 38, 41, 46, 50, 51]
+
+        # for index in indices:
+        for x in range(0, len(X)):
+            dcm_image = X[x]
+
+            print(x)
+
+            #reshapes for display
+            dcm_image = np.squeeze(dcm_image, axis=2)
+            dcm_image = np.invert(dcm_image)
+            # self.dicom_reader.plot_pixel_array(dcm_image)
+
+            result = self.image_preprocessor.edge_filter(dcm_image)
+
+            # dcm_image = np.invert(result)
+
+            self.dicom_reader.plot_pixel_array(result)
+
+        return
+
+
+
+
+
+        kernel_size = 5
+        sigma = 2
+        strong_pixel = 255
+        weak_pixel = 75
+        high_threshold = 0.15
+        low_threshold = 0.05
 
         # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
-        dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image)
+        new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
         # dcm_image = np.squeeze(dcm_image, axis=2)
-        self.dicom_reader.plot_pixel_array(dcm_image)
+        self.dicom_reader.plot_pixel_array(new_dcm_image)
+
+
+        # parameters = [[5, 1, 255, 75, 0.15, 0.05],
+        #             [2, 1, 255, 75, 0.15, 0.05],
+        #             [10, 1, 255, 75, 0.15, 0.05],
+        #             [5, 0.5, 255, 75, 0.15, 0.05],
+        #             [5, 1, 150, 75, 0.15, 0.05],
+        #             [5, 1, 255, 150, 0.15, 0.05],
+        #             [5, 1, 255, 75, 0.3, 0.05],
+        #             [5, 1, 255, 75, 0.15, 0.15],
+        #             [5, 1, 255, 75, 0.7, 0.05],
+        #             [5, 1, 255, 75, 0.7, 0.5],
+        #             [50, 1, 255, 75, 0.15, 0.05]
+        #             ]
+
+        # for x in range(0, len(parameters)):
+
+        #     kernel_size    = parameters[x][0]
+        #     sigma          = parameters[x][1]
+        #     strong_pixel   = parameters[x][2]
+        #     weak_pixel     = parameters[x][3]
+        #     high_threshold = parameters[x][4]
+        #     low_threshold  = parameters[x][5]
+
+        #     # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
+        #     new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
+        #     # dcm_image = np.squeeze(dcm_image, axis=2)
+        #     self.dicom_reader.plot_pixel_array(new_dcm_image)
 
 
         return
