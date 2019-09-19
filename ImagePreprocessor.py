@@ -25,6 +25,8 @@ class ImagePreprocessor:
     image_width = 1024
     image_height = 1024
 
+    preprocessed_ext = "png"
+
     dicom_reader = None
     data_handler = None
 
@@ -68,8 +70,6 @@ class ImagePreprocessor:
 
 
 
-
-
         train_normalized = train/255
         validate_normalized = validate/255
         test_normalized = test/255
@@ -77,6 +77,10 @@ class ImagePreprocessor:
 
 
         return train_normalized, validate_normalized, test_normalized, scaler
+
+    #normalizes single list of images
+    def normalize_data(self, images):
+        return images/255
 
     #applies gaussian blur to the provided image, and returns it
     def apply_gaussian_blur(self, image, kernel_size=5, sigma=1):
@@ -266,9 +270,9 @@ class ImagePreprocessor:
         #blurs image for noise reduction
         blurred = self.reduce_noise(image)
 
-        # strong_pixel = 255 #255 default
-        # weak_pixel = 127 #127 default
-        # ret,threshold1 = cv2.threshold(blurred,weak_pixel,strong_pixel,cv2.THRESH_BINARY)
+        strong_pixel = 255 #255 default
+        weak_pixel = 99 #127 default
+        ret,threshold0 = cv2.threshold(blurred,weak_pixel,strong_pixel,cv2.THRESH_BINARY_INV)
 
 
         #gets rid of the distinct white portions
@@ -281,9 +285,10 @@ class ImagePreprocessor:
         threshold3 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 5,2)
         threshold3 = self.reduce_noise(threshold3)
 
-        result = self.subtract_images(image, threshold1)
+        result = self.subtract_images(image, threshold0)
+        result = self.subtract_images(result, threshold1)
         result = self.subtract_images(result, threshold2)
-        result = self.subtract_images(result, threshold3)
+        # result = self.subtract_images(result, threshold3)
 
         return result
 
@@ -305,20 +310,33 @@ class ImagePreprocessor:
 
             #extracts image_id from the file path
             image_id = image_path.split('\\')[-1].replace(".dcm", "")
-            print("Image id: "+str(image_id))
+            # print("Image id: "+str(image_id))
 
             new_path = self.dicom_reader.get_dicom_filtered_train_path()
-            new_path += "/"+str(image_id)+".png"
+            new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
+
+            #if shouldn't replace file, and if file exists, then skip preprocessing
+            if replace==False and os.path.isfile(new_path):
+                continue
 
             pixels = dicom_image.pixel_array
-
-            print("New path: "+str(new_path))
-
-
 
             ## Perform preprocessing ##
             pixels = np.invert(pixels)
             pixels = self.edge_filter(pixels)
+
+
+            # kernel_size = 5
+            # sigma = 2
+            # strong_pixel = 255
+            # weak_pixel = 75
+            # high_threshold = 0.15
+            # low_threshold = 0.05
+
+            # # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
+            # new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
+
+
 
 
             #if the pixel data is reduced (e.g. a 512 x 512 image is collapsed to 256 x 256) then ds.Rows and ds.Columns should be set appropriately. 
@@ -327,20 +345,12 @@ class ImagePreprocessor:
 
 
 
-
-            #determines if should save the file depending on if user wants to replace any existing file, or if the file doesn't yet exist
-            should_save = False
-            if replace==True or os.path.isfile(new_path)==False:
-                should_save = True
-
-            #saves dicom image
-            if should_save:
-                im = Image.fromarray(pixels)
-                im.save(new_path)
+            im = Image.fromarray(pixels)
+            im.save(new_path)
 
                 # self.dicom_reader.save_dicom_obj(new_path, dicom_image)
 
-            input("Continue...")
+            print("Preprocessed image "+str(i)+"/"+str(len(train_dicom_paths)))
 
 
 

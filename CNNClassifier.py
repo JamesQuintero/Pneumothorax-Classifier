@@ -1,6 +1,7 @@
 from DICOM_reader import DICOMReader
 from DataHandler import DataHandler
 from ImagePreprocessor import ImagePreprocessor
+from DataGenerator import DataGenerator
 
 from mask_functions import rle2mask
 
@@ -18,11 +19,12 @@ from keras.layers import MaxPooling2D
 from keras.layers import Flatten
 from keras.layers import Dense
 from keras.layers import Dropout
+from keras.layers import BatchNormalization
 from keras.models import load_model
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
 
-import cv2
+import imageio
 
 #For my windows machine
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -47,185 +49,106 @@ class CNNClassifier:
         self.data_handler = DataHandler()
         self.image_preprocessor = ImagePreprocessor()
 
-    #returns 1024x1024 raw pixel data of feature dicom images
-    # feature images will have pixel intensities
-    # target images will have binary denoting masks of pneumothorax
-    def get_unprocessed_feature_target_images(self, max_num=None):
-        image_height = self.image_height
-        image_width = self.image_width
-        image_channels = 1
+    # #returns 1024x1024 raw pixel data of feature dicom images
+    # # feature images will have pixel intensities
+    # # target images will have binary denoting masks of pneumothorax
+    # def get_unprocessed_feature_target_images(self, max_num=None):
+    #     image_height = self.image_height
+    #     image_width = self.image_width
+    #     image_channels = 1
 
 
-        train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
+    #     train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
 
-        #if no max, set max to the number of train items
-        if max_num==None:
-            max_num = len(train_dicom_paths)
-        #limit number of training images to max_num
-        else:
-            train_dicom_paths = train_dicom_paths[:max_num]
-
-
-
-        df_full = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
-
-
-        #initialize feature and target images to zeroes
-        X_train = np.zeros((len(train_dicom_paths), image_height, image_width, image_channels), dtype=np.uint8) #is type 8-bit for pixel intensity values
-        # Y_train = np.zeros((len(train_dicom_paths), image_height, image_width, 1), dtype=np.bool) #is type bool because if pixel is 1, there is mask, 0 otherwise
-        Y_train = np.zeros((len(train_dicom_paths)), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
+    #     #if no max, set max to the number of train items
+    #     if max_num==None:
+    #         max_num = len(train_dicom_paths)
+    #     #limit number of training images to max_num
+    #     else:
+    #         train_dicom_paths = train_dicom_paths[:max_num]
 
 
 
-        print('Getting train images and masks ... ')
-        sys.stdout.flush() #?
+    #     df_full = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
 
-        # for n, _id in tqdm_notebook(enumerate(train_dicom_paths), total=len(train_dicom_paths)):
-
-        for i, image_path in enumerate(train_dicom_paths):
-            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
-
-            #extracts image_id from the file path
-            image_id = image_path.split('\\')[-1].replace(".dcm", "")
-            print("Image id: "+str(image_id))
-
-            # print("Shape: "+str(dicom_image.pixel_array.shape))
-
-            # #apply dicom pixels
-            X_train[i] = np.expand_dims(dicom_image.pixel_array, axis=2)
-
-            masks = self.data_handler.find_masks(image_id=image_id, dataset=df_full)
-
-            print("Num masks: "+str(len(masks)))
-            # input()
-            # continue
-
-
-            try:
-                #if no masks for image, then skip
-                if len(masks)==0:
-                    continue
-                else:
-                    # if type(df_full.loc[_id.split('/')[-1][:-4],' EncodedPixels']) == str:
-                    last_mask = masks[-1]
-
-                    ## To do:
-                    ##   Account for all masks found 
-                    ## 
-
-                    #converts to boolean
-                    # Y_train[i] = np.expand_dims(rle2mask(last_mask, image_height, image_width), axis=2)
-
-
-                    Y_train[i] = 1
-
-
-            except KeyError:
-                print("Key {_id.split('/')[-1][:-4]} without mask, assuming healthy patient.")
-                # Y_train[n] = np.zeros((image_height, image_width, 1)) # Assume missing masks are empty masks.
-                Y_train[i] = 0
-
-
-        # #plots the scans and their masks
-        # for x in range(0, len(X_train)):
-        #     self.dicom_reader.plot_dicom(X_train[x], Y_train[x])
-
-        print("X_train size: "+str(len(X_train)))
-        print("Y_train size: "+str(len(Y_train)))
-
-
-        return X_train, Y_train
+    #     #initialize feature and target images to zeroes
+    #     X_train = np.zeros((len(train_dicom_paths), image_height, image_width, image_channels), dtype=np.uint8) #is type 8-bit for pixel intensity values
+    #     # Y_train = np.zeros((len(train_dicom_paths), image_height, image_width, 1), dtype=np.bool) #is type bool because if pixel is 1, there is mask, 0 otherwise
+    #     Y_train = np.zeros((len(train_dicom_paths)), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
 
 
 
-    def get_processed_feature_target_images(self, max_num=None):
-        image_height = self.image_height
-        image_width = self.image_width
-        image_channels = 1
+    #     print('Getting train images and masks ... ')
+    #     sys.stdout.flush() #?
 
 
-        train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
+    #     # for n, _id in tqdm_notebook(enumerate(train_dicom_paths), total=len(train_dicom_paths)):
+
+    #     for i, image_path in enumerate(train_dicom_paths):
+    #         dicom_image = self.dicom_reader.get_dicom_obj(image_path)
+
+    #         #extracts image_id from the file path
+    #         image_id = image_path.split('\\')[-1].replace(".dcm", "")
+    #         print("Image id: "+str(image_id))
+
+    #         # print("Shape: "+str(dicom_image.pixel_array.shape))
+
+    #         # #apply dicom pixels
+    #         X_train[i] = np.expand_dims(dicom_image.pixel_array, axis=2)
+
+    #         masks = self.data_handler.find_masks(image_id=image_id, dataset=df_full)
+
+    #         print("Num masks: "+str(len(masks)))
+    #         # input()
+    #         # continue
+
+
+    #         try:
+    #             #if no masks for image, then skip
+    #             if len(masks)==0:
+    #                 continue
+    #             else:
+    #                 # if type(df_full.loc[_id.split('/')[-1][:-4],' EncodedPixels']) == str:
+    #                 last_mask = masks[-1]
+
+    #                 ## To do:
+    #                 ##   Account for all masks found 
+    #                 ## 
+
+    #                 #converts to boolean
+    #                 # Y_train[i] = np.expand_dims(rle2mask(last_mask, image_height, image_width), axis=2)
+
+
+    #                 Y_train[i] = 1
+
+
+    #         except KeyError:
+    #             print("Key {_id.split('/')[-1][:-4]} without mask, assuming healthy patient.")
+    #             # Y_train[n] = np.zeros((image_height, image_width, 1)) # Assume missing masks are empty masks.
+    #             Y_train[i] = 0
+
+
+    #     # #plots the scans and their masks
+    #     # for x in range(0, len(X_train)):
+    #     #     self.dicom_reader.plot_dicom(X_train[x], Y_train[x])
+
+    #     print("X_train size: "+str(len(X_train)))
+    #     print("Y_train size: "+str(len(Y_train)))
+
+
+    #     return X_train, Y_train
+
+
+    #returns list of paths to processed image files
+    def get_processed_image_paths(self, max_num=None):
+        image_paths = self.dicom_reader.load_filtered_dicom_train_paths()
 
         #if no max, set max to the number of train items
-        if max_num==None:
-            max_num = len(train_dicom_paths)
-        #limit number of training images to max_num
-        else:
-            train_dicom_paths = train_dicom_paths[:max_num]
+        if max_num!=None:
+            image_paths = image_paths[:max_num]
 
-
-
-        df_full = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
-
-
-        #initialize feature and target images to zeroes
-        X_train = np.zeros((len(train_dicom_paths), image_height, image_width, image_channels), dtype=np.uint8) #is type 8-bit for pixel intensity values
-        # Y_train = np.zeros((len(train_dicom_paths), image_height, image_width, 1), dtype=np.bool) #is type bool because if pixel is 1, there is mask, 0 otherwise
-        Y_train = np.zeros((len(train_dicom_paths)), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
-
-
-
-        print('Getting train images and masks ... ')
-        sys.stdout.flush() #?
-
-
-        # for n, _id in tqdm_notebook(enumerate(train_dicom_paths), total=len(train_dicom_paths)):
-
-        for i, image_path in enumerate(train_dicom_paths):
-            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
-
-            #extracts image_id from the file path
-            image_id = image_path.split('\\')[-1].replace(".dcm", "")
-            print("Image id: "+str(image_id))
-
-            # print("Shape: "+str(dicom_image.pixel_array.shape))
-
-            # #apply dicom pixels
-            X_train[i] = np.expand_dims(dicom_image.pixel_array, axis=2)
-
-            masks = self.data_handler.find_masks(image_id=image_id, dataset=df_full)
-
-            print("Num masks: "+str(len(masks)))
-            # input()
-            # continue
-
-
-            try:
-                #if no masks for image, then skip
-                if len(masks)==0:
-                    continue
-                else:
-                    # if type(df_full.loc[_id.split('/')[-1][:-4],' EncodedPixels']) == str:
-                    last_mask = masks[-1]
-
-                    ## To do:
-                    ##   Account for all masks found 
-                    ## 
-
-                    #converts to boolean
-                    # Y_train[i] = np.expand_dims(rle2mask(last_mask, image_height, image_width), axis=2)
-
-
-                    Y_train[i] = 1
-
-
-            except KeyError:
-                print("Key {_id.split('/')[-1][:-4]} without mask, assuming healthy patient.")
-                # Y_train[n] = np.zeros((image_height, image_width, 1)) # Assume missing masks are empty masks.
-                Y_train[i] = 0
-
-
-        # #plots the scans and their masks
-        # for x in range(0, len(X_train)):
-        #     self.dicom_reader.plot_dicom(X_train[x], Y_train[x])
-
-        print("X_train size: "+str(len(X_train)))
-        print("Y_train size: "+str(len(Y_train)))
-
-
-        return X_train, Y_train
-
+        return image_paths
 
 
 
@@ -254,7 +177,7 @@ class CNNClassifier:
             statistical_measures['TP'] = TP
         except Exception as error:
             print("Mishapen confusion matrix") 
-            return statistical_measures
+            return {}
 
 
         #https://en.wikipedia.org/wiki/Confusion_matrix
@@ -335,40 +258,45 @@ class CNNClassifier:
 
         CNN_size = 16
         pool_size = (3,3)
+        filter_size = (3,3)
         CNN_activation = "relu"
         dense_activation = "relu"
         output_activation = "sigmoid"
 
-        classifier.add(Convolution2D(CNN_size, (3, 3), input_shape = (self.image_width, self.image_height, 1), activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), activation = CNN_activation))
 
         # Step 2 - Pooling
         #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
         #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
         classifier.add(MaxPooling2D(pool_size = pool_size))
+        # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
+        # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
+        # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
+        # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(0.25))
 
         # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        # classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
         # classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(Dropout(0.25))
 
         # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, (3, 3), activation = CNN_activation))
+        # classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
         # classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(Dropout(0.25))
 
@@ -381,7 +309,7 @@ class CNNClassifier:
 
         classifier.add(Dense(units = 1, activation = output_activation))
 
-        classifier.compile(optimizer = 'rmsprop', loss = 'binary_crossentropy', metrics = ['accuracy'])
+        classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
 
         classifier.summary()
 
@@ -392,104 +320,9 @@ class CNNClassifier:
     #trains CNN
     def train(self):
 
-        # #labels are dataframe where keys are column names, and values are rows of that column
-        # labels = self.data_handler.read_train_labels()
-
-        # #converts DataFrame to 2D list
-        # labels = labels.values.tolist()
-
-        # print("Num labels: "+str(len(labels)))
-
-
-        max_images = 200
-        X, Y = self.get_processed_feature_target_images(max_images)
-
-        # print("Index to use: ")
-        # index = -1
-        # for x in range(0, len(Y)):
-        #     if Y[x]!=0:
-        #         print("Index: "+str(x))
-        #         # index = x
-        #         # break
-        #         dcm_image = np.squeeze(X[x], axis=2)
-        #         self.dicom_reader.plot_pixel_array(dcm_image)
-
-        # if index==-1:
-        #     print("No image with mask, increase max_images")
-        #     return
-
-
-
-        # index = 13
-
-        # indices = [14, 18, 28, 29, 35, 36, 38, 41, 46, 50, 51]
-
-        # for index in indices:
-        for x in range(0, len(X)):
-            dcm_image = X[x]
-
-            print(x)
-
-            #reshapes for display
-            dcm_image = np.squeeze(dcm_image, axis=2)
-            dcm_image = np.invert(dcm_image)
-            # self.dicom_reader.plot_pixel_array(dcm_image)
-
-            result = self.image_preprocessor.edge_filter(dcm_image)
-
-            # dcm_image = np.invert(result)
-
-            self.dicom_reader.plot_pixel_array(result)
-
-        return
-
-
-
-
-
-        kernel_size = 5
-        sigma = 2
-        strong_pixel = 255
-        weak_pixel = 75
-        high_threshold = 0.15
-        low_threshold = 0.05
-
-        # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
-        new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
-        # dcm_image = np.squeeze(dcm_image, axis=2)
-        self.dicom_reader.plot_pixel_array(new_dcm_image)
-
-
-        # parameters = [[5, 1, 255, 75, 0.15, 0.05],
-        #             [2, 1, 255, 75, 0.15, 0.05],
-        #             [10, 1, 255, 75, 0.15, 0.05],
-        #             [5, 0.5, 255, 75, 0.15, 0.05],
-        #             [5, 1, 150, 75, 0.15, 0.05],
-        #             [5, 1, 255, 150, 0.15, 0.05],
-        #             [5, 1, 255, 75, 0.3, 0.05],
-        #             [5, 1, 255, 75, 0.15, 0.15],
-        #             [5, 1, 255, 75, 0.7, 0.05],
-        #             [5, 1, 255, 75, 0.7, 0.5],
-        #             [50, 1, 255, 75, 0.15, 0.05]
-        #             ]
-
-        # for x in range(0, len(parameters)):
-
-        #     kernel_size    = parameters[x][0]
-        #     sigma          = parameters[x][1]
-        #     strong_pixel   = parameters[x][2]
-        #     weak_pixel     = parameters[x][3]
-        #     high_threshold = parameters[x][4]
-        #     low_threshold  = parameters[x][5]
-
-        #     # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
-        #     new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
-        #     # dcm_image = np.squeeze(dcm_image, axis=2)
-        #     self.dicom_reader.plot_pixel_array(new_dcm_image)
-
-
-        return
-
+        max_images = 1000
+        X = self.get_processed_image_paths(max_images)
+        Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
 
 
@@ -497,75 +330,96 @@ class CNNClassifier:
         train_ratio = 0.7
         validation_ratio = 0.2
         X_train, X_validate, X_test = self.data_handler.split_data(X, train_ratio, validation_ratio)
-        Y_train, Y_validate, Y_test = self.data_handler.split_data(Y, train_ratio, validation_ratio)
-        # for label in labels:
-        #   print(label)
+        # Y_train, Y_validate, Y_test = self.data_handler.split_data(Y, train_ratio, validation_ratio)
 
-        print("X_train: "+str(X_train.shape))
-        print("X_validate: "+str(X_validate.shape))
-        print("X_test: "+str(X_test.shape))
-        print()
-        print("Y_train: "+str(Y_train.shape))
-        print("Y_validate: "+str(Y_validate.shape))
-        print("Y_test: "+str(Y_test.shape))
-        print()
+        print("X_train: "+str(len(X_train)))
+        print("X_validate: "+str(len(X_validate)))
 
-
-
-        X_train_normalized, X_validate_normalized, X_test_normalized, X_normalization_params = self.image_preprocessor.normalize_data(X_train, X_validate, X_test)
-
-        #Y is already normalized
-        # Y_train_normalized, Y_validate_normalized, Y_test_normalized, Y_normalization_params = self.normalize_data(Y_train, Y_validate, Y_test)
+        # print("X_train: "+str(X_train.shape))
+        # print("X_validate: "+str(X_validate.shape))
+        # print("X_test: "+str(X_test.shape))
+        # print()
+        # print("Y_train: "+str(Y_train.shape))
+        # print("Y_validate: "+str(Y_validate.shape))
+        # print("Y_test: "+str(Y_test.shape))
+        # print()
+        # print("Num pneumothorax in train: "+str(np.sum(Y_train))+"/"+str(Y_train.shape[0]))
+        # print("Num pneumothorax in validate: "+str(np.sum(Y_validate))+"/"+str(Y_validate.shape[0]))
+        # print()
 
 
-        print("X_train: "+str(X_train_normalized.shape))
-        print("X_validate: "+str(X_validate_normalized.shape))
-        print("X_test: "+str(X_test_normalized.shape))
-        print()
+
+        # X_train_normalized, X_validate_normalized, X_test_normalized, X_normalization_params = self.image_preprocessor.normalize_data(X_train, X_validate, X_test)
+
+
+
+        # print("X_train: "+str(X_train_normalized.shape))
+        # print("X_validate: "+str(X_validate_normalized.shape))
+        # print("X_test: "+str(X_test_normalized.shape))
+        # print()
         # print("Y_train: "+str(len(Y_train_normalized)))
         # print("Y_validate: "+str(len(Y_validate_normalized)))
         # print("Y_test: "+str(len(Y_test_normalized)))
         # print()
 
-        # print("X_train: "+str(X_train[0]))
-
-        # print("X_train_normalized: "+str(X_train_normalized[0]))
-
 
         classifier = self.create_CNN()
 
 
-        # construct the image generator for data augmentation
-        aug = ImageDataGenerator(rotation_range=30, width_shift_range=0.1,
-            height_shift_range=0.1, shear_range=0.2, zoom_range=0.2,
-            horizontal_flip=True, fill_mode="nearest")
+        # # construct the image generator for data augmentation
+        # datagen = ImageDataGenerator(rotation_range=30, width_shift_range=0.1,
+        #     height_shift_range=0.1, shear_range=0.2, zoom_range=0.2,
+        #     horizontal_flip=True, fill_mode="nearest")
 
-        X_train_new_images = aug.flow(X_train_normalized, Y_train, batch_size=32)
-
-
-        # Y_train = keras.utils.to_categorical(Y_train, 1)
-
+        # datagen.fit(X_train_normalized)
 
         
-        print("X_train: "+str(X_train_normalized.shape))
-        print("X_validate: "+str(X_validate_normalized.shape))
-        print("Y_train: "+str(Y_train.shape))
-        # print("Len x: "+str(X_train_new_images.shape))
+        
 
 
-        # # fits the model on batches with real-time data augmentation:
-        # classifier.fit_generator(X_train_new_images, steps_per_epoch=len(X_train_new_images) / 32, epochs=epochs)
+        # Parameters
+        params = {'dim': (1024,1024,1),
+                  'shuffle': True}
 
+        batch_size = 30
+        training_generator = DataGenerator(X_train, Y, batch_size, **params)
 
-        ### Should really perform data augmentation ###
 
 
         #trains
-        batch_size = 10
-        epochs = 3
-        classifier.fit(X_train_normalized, Y_train,
-                       batch_size=batch_size,
-                       epochs=epochs)
+        epochs = 5
+
+        # #normal training
+        # classifier.fit(X_train_normalized, Y_train,
+        #                batch_size=batch_size,
+        #                epochs=epochs)
+
+        # # fits the model on batches with real-time data augmentation:
+        # classifier.fit_generator(datagen.flow(X_train_normalized, Y_train, batch_size=batch_size),
+        #                         steps_per_epoch=len(X_train_normalized) / batch_size,
+        #                         epochs=epochs)
+
+        # fits the model on batches with real-time data augmentation:
+        classifier.fit_generator(generator=training_generator,
+                                steps_per_epoch=len(X_train) / batch_size,
+                                epochs=epochs)
+
+
+
+
+        # # here's a more "manual" example
+        # for e in range(epochs):
+        #     print('Epoch', e)
+        #     batches = 0
+        #     for x_batch, y_batch in datagen.flow(x_train, y_train, batch_size=32):
+        #         model.fit(x_batch, y_batch)
+        #         batches += 1
+        #         if batches >= len(x_train) / 32:
+        #             # we need to break the loop by hand because
+        #             # the generator loops indefinitely
+        #             break
+
+
 
 
         ## Plot training history ##
@@ -587,24 +441,26 @@ class CNNClassifier:
 
         from sklearn.metrics import confusion_matrix
 
+        validation_generator = DataGenerator(X_validate, Y, batch_size, **params)
+
         #predicts
-        preds = classifier.predict(X_validate_normalized)
+        preds = classifier.predict_generator(validation_generator)
 
 
 
 
-        #gets dimensions of confusion matrix
-        # y_validate_non_category = [ np.argmax(t) for t in Y_validate ]
-        y_validate_non_category = Y_validate
+        #gets actual validation labels
+        X_validate_images, y_validate_non_category = validation_generator.get_processed_images(start=0, end=len(X_validate))
+        #gets predicted validation labels
         y_predict_non_category = [ t>0.5 for t in preds]
 
-        print(y_validate_non_category[:10])
-        print(preds[:10])
+        print("Validation labels: "+str(y_validate_non_category[:10]))
+        print("Predicted labels: "+str(preds[:10]))
         # print(y_predict_non_category)
 
         #calculates confusion matrix
         conf_matrix = confusion_matrix(y_validate_non_category, y_predict_non_category)
-        print(conf_matrix)
+        print("Confusion matrix: "+str(conf_matrix))
 
         print()
         statistical_measures = self.calculate_statistical_measures(conf_matrix)

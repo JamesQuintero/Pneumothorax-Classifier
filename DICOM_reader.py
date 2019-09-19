@@ -176,7 +176,7 @@ class DICOMReader:
     #rerturns list of paths that point to filtered training images
     def load_filtered_dicom_train_paths(self):
         try:
-            train_fns = glob.glob(self.dicom_filtered_train_path+"/*dcm")
+            train_fns = glob.glob(self.dicom_filtered_train_path+"/*png")
         except Exception as error:
             print("load_dicom_train_objects() error: "+str(error))
             return []

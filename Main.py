@@ -22,12 +22,13 @@ Handles user input and utilizing all scripts in this project
 """
 class Main: 
 
-    #global methods global variable
     data_handler = None
-
+    image_preprocessor = None
+    CNN_classifier = None
 
     def __init__(self):
         self.data_handler = DataHandler()
+
 
 
     """ 
@@ -38,6 +39,7 @@ class Main:
         print()
         print("-- Menu --")
         print("1) Preprocess scans")
+        print("2) CNN classifier")
 
         print("0) Quit")
         choice = int(input("Choice: "))
@@ -46,6 +48,8 @@ class Main:
         #Preprocess images
         if choice==1:
             self.preprocess()
+        elif choice==2:
+            self.cnn_classifier()
 
 
         #Quits the program
@@ -60,10 +64,27 @@ class Main:
 
 
     """
+    CNN Classifier menu
+    """
+    def cnn_classifier(self):
+        self.CNN_classifier = CNNClassifier()
+
+        self.CNN_classifier.train()
+
+
+    """
     Preprocessor menu
     """
     def preprocess(self):
-        pass
+        self.image_preprocessor = ImagePreprocessor()
+
+        choice = input("Wish to replace existing preprocessed images? (y/n): ")
+
+        replace = False
+        if choice.lower()=="y":
+            replace = True
+
+        self.image_preprocessor.bulk_preprocessing(replace)
 
 if __name__=="__main__":
     main = Main()
