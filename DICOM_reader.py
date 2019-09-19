@@ -1,5 +1,6 @@
 import glob #for loading DICOM files from disk
 import pydicom #for reading DICOM files
+from pydicom.encaps import encapsulate
 import matplotlib.pyplot as plt #for displaying DICOM files
 import pandas as pd #for reading data files
 import os
@@ -24,7 +25,7 @@ class DICOMReader:
 
     #path variables
     dicom_train_path = "./data/dicom-images-train/*/*/*.dcm"
-    dicom_filtered_train_path = "./data/dicom-images-train-filtered/*.dcm"
+    dicom_filtered_train_path = "./data/dicom-images-train-filtered/"
 
     def __init__(self):
         self.data_handler = DataHandler()
@@ -175,7 +176,7 @@ class DICOMReader:
     #rerturns list of paths that point to filtered training images
     def load_filtered_dicom_train_paths(self):
         try:
-            train_fns = glob.glob(self.dicom_filtered_train_path)
+            train_fns = glob.glob(self.dicom_filtered_train_path+"/*dcm")
         except Exception as error:
             print("load_dicom_train_objects() error: "+str(error))
             return []
@@ -198,7 +199,12 @@ class DICOMReader:
             print("get_dicom_obj() error: "+str(error))
             return None
 
+    # def rewrite_dicom_obj(self, path, dicom_image, pixels):
+    #     pydicom.dcmwrite(path, dicom_image)
 
+
+    def get_dicom_filtered_train_path(self):
+        return self.dicom_filtered_train_path
 
 
 

@@ -13,6 +13,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 import cv2 #py -3 -m pip install opencv-python
 
+from PIL import Image
+
 """
 
 Handles image preprocessing, validation, and testing
@@ -292,9 +294,60 @@ class ImagePreprocessor:
         pass
 
 
+    #performs bulk preprocessing on training images
+    def bulk_preprocessing(self, replace=True):
+
+        train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
+
+
+        for i, image_path in enumerate(train_dicom_paths):
+            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
+
+            #extracts image_id from the file path
+            image_id = image_path.split('\\')[-1].replace(".dcm", "")
+            print("Image id: "+str(image_id))
+
+            new_path = self.dicom_reader.get_dicom_filtered_train_path()
+            new_path += "/"+str(image_id)+".png"
+
+            pixels = dicom_image.pixel_array
+
+            print("New path: "+str(new_path))
+
+
+
+            ## Perform preprocessing ##
+            pixels = np.invert(pixels)
+            pixels = self.edge_filter(pixels)
+
+
+            #if the pixel data is reduced (e.g. a 512 x 512 image is collapsed to 256 x 256) then ds.Rows and ds.Columns should be set appropriately. 
+            #https://github.com/pydicom/pydicom/issues/738
+            # dicom_image.PixelData = dicom_image.pixel_array.tobytes()
+
+
+
+
+            #determines if should save the file depending on if user wants to replace any existing file, or if the file doesn't yet exist
+            should_save = False
+            if replace==True or os.path.isfile(new_path)==False:
+                should_save = True
+
+            #saves dicom image
+            if should_save:
+                im = Image.fromarray(pixels)
+                im.save(new_path)
+
+                # self.dicom_reader.save_dicom_obj(new_path, dicom_image)
+
+            input("Continue...")
+
+
+
 
 
 if __name__=="__main__":
     image_preprocessor = ImagePreprocessor()
     
     # image_preprocessor.normalize_data()
+    image_preprocessor.bulk_preprocessing(replace=True)

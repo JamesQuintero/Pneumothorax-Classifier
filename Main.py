@@ -59,7 +59,9 @@ class Main:
         return True
 
 
-    """ Preprocessor menu """
+    """
+    Preprocessor menu
+    """
     def preprocess(self):
         pass
 
