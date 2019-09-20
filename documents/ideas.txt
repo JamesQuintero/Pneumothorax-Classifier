@@ -6,3 +6,5 @@ Perform some threshold algorithm to identify ribs/bones, then remove those from 
 Can crop images to only include the lungs. Crop side until reach majority white area (ribcage?), for bottom, top, and sides. 
 
 *) Multiple images thresholded to different levels, so that if the line of pneumothorax is dimmer than the ribs, it can still be count if the threshold is high enough. Because each case is different. 
+
+Make areas outside of lungs black, then make it so the part of the lung with pneumothorax is bright white. 

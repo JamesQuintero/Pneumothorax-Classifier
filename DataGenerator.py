@@ -1,7 +1,5 @@
-# from DICOM_reader import DICOMReader
 from DataHandler import DataHandler
 from ImagePreprocessor import ImagePreprocessor
-# from mask_functions import rle2mask
 
 import sys
 import keras
@@ -44,12 +42,9 @@ class DataGenerator(keras.utils.Sequence):
     #loads processed images, and returns them in batch
     #returns the index'th batch size amount of items
     def __getitem__(self, index):
-        # input()
 
         start = self.batch_size * index
         end = self.batch_size * (index+1)
-
-        # batch_x = self.images[start : end]
 
         batch_x, batch_y = self.get_processed_images(start, end)
 
@@ -58,9 +53,6 @@ class DataGenerator(keras.utils.Sequence):
 
     #returns list of images and list of their corresponding labels
     def get_processed_images(self, start, end):
-
-        #gets the first image to get its dimensions
-        # image = imageio.imread(self.image_paths[start])
 
         image_height = self.dim[0]
         image_width = self.dim[1]
@@ -71,13 +63,9 @@ class DataGenerator(keras.utils.Sequence):
         X_train = np.zeros(((end-start), image_height, image_width, image_channels), dtype=np.uint8) #is type 8-bit for pixel intensity values
         Y_train = np.zeros((end-start), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
 
-
-
-        # print('Getting train images and masks ... ')
         sys.stdout.flush() #what is this for?
 
 
-        # for i, image_path in enumerate(png_paths):
         for i in range(start, min(end, len(self.image_paths))):
             image_path = self.image_paths[i]
             png_image = imageio.imread(image_path)
@@ -86,15 +74,10 @@ class DataGenerator(keras.utils.Sequence):
             image_id = self.image_paths[i].split('\\')[-1].replace("."+str(self.image_preprocessor.preprocessed_ext), "")
             # print("Image id: "+str(image_id))
 
-            # print("Shape: "+str(dicom_image.pixel_array.shape))
-
             # #apply dicom pixels
             X_train[i-start] = np.expand_dims(png_image, axis=2)
-            # print(X_train[i-start].shape)
 
             masks = self.data_handler.find_masks(image_id=image_id, dataset=self.labels)
-
-            # print("Num masks: "+str(len(masks)))
 
 
             try:

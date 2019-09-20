@@ -8,11 +8,13 @@ import os
 import numpy as np
 from scipy import ndimage
 from scipy.ndimage.filters import convolve
+import scipy.ndimage.filters as filters
+import scipy.ndimage.morphology as morphology
 from scipy import misc
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 import cv2 #py -3 -m pip install opencv-python
-
+import matplotlib.pyplot as plt #for displaying DICOM files
 from PIL import Image
 
 """
@@ -247,12 +249,14 @@ class ImagePreprocessor:
         non_max_image = self.non_max_suppression(gradient_matrix, theta_matrix)
 
         #only considers important edges
-        threshold_image = self.threshold(non_max_image, strong_pixel, weak_pixel, high_threshold, low_threshold)
+        # threshold_image = self.threshold(non_max_image, strong_pixel, weak_pixel, high_threshold, low_threshold)
 
         # #edge tracking
-        edge_tracking = self.hysteresis(threshold_image, strong_pixel, weak_pixel)
+        # edge_tracking = self.hysteresis(threshold_image, strong_pixel, weak_pixel)
 
-        return edge_tracking
+        # return edge_tracking
+
+        return non_max_image
 
         # return non_max_image
 
@@ -272,7 +276,7 @@ class ImagePreprocessor:
 
         strong_pixel = 255 #255 default
         weak_pixel = 99 #127 default
-        ret,threshold0 = cv2.threshold(blurred,weak_pixel,strong_pixel,cv2.THRESH_BINARY_INV)
+        # ret,threshold0 = cv2.threshold(blurred,weak_pixel,strong_pixel,cv2.THRESH_BINARY_INV)
 
 
         #gets rid of the distinct white portions
@@ -285,18 +289,348 @@ class ImagePreprocessor:
         threshold3 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 5,2)
         threshold3 = self.reduce_noise(threshold3)
 
-        result = self.subtract_images(image, threshold0)
+        result = image
+        # result = self.subtract_images(image, threshold0)
         result = self.subtract_images(result, threshold1)
         result = self.subtract_images(result, threshold2)
-        # result = self.subtract_images(result, threshold3)
+        result = self.subtract_images(result, threshold3)
 
         return result
 
 
+    # https://stackoverflow.com/questions/3684484/peak-detection-in-a-2d-array/3689710#3689710
+    """
+    Takes an array and detects the troughs using the local maximum or minimum filter depending on type
+    Returns a boolean mask of the troughs (i.e. 1 when
+    the pixel's value is the neighborhood maximum, 0 otherwise)
+    """
+    def detect_local_extremas(self, array, threshold=5, filter_type="min"):
+        # define an connected neighborhood
+        # http://www.scipy.org/doc/api_docs/SciPy.ndimage.morphology.html#generate_binary_structure
+        neighborhood = morphology.generate_binary_structure(len(array.shape),2)
+        
 
-    #crops image so that only lungs/ribcage are prominantly displayed. 
-    def crop(self):
-        pass
+        # apply the local minimum filter; all locations of minimum value 
+        # in their neighborhood are set to 1
+
+        if filter_type.lower()=="min" or filter_type.lower()=="minimum":
+            # http://www.scipy.org/doc/api_docs/SciPy.ndimage.filters.html#minimum_filter
+            local_extreme = (filters.minimum_filter(array,size=threshold)==array)
+        elif filter_type.lower()=="max" or filter_type.lower()=="maximum":
+            local_extreme = (filters.maximum_filter(array,size=threshold)==array)
+
+
+        # local_extreme is a mask that contains the peaks we are 
+        # looking for, but also the background.
+        # In order to isolate the peaks we must remove the background from the mask.
+        # 
+        # we create the mask of the background
+        background = (array==0)
+        # 
+        # a little technicality: we must erode the background in order to 
+        # successfully subtract it from local_extreme, otherwise a line will 
+        # appear along the background border (artifact of the local minimum filter)
+        # http://www.scipy.org/doc/api_docs/SciPy.ndimage.morphology.html#binary_erosion
+        eroded_background = morphology.binary_erosion(background, structure=neighborhood, border_value=1)
+        # 
+        # we obtain the final mask, containing only peaks, 
+        # by removing the background from the local_extreme mask
+        detected_minima = local_extreme - eroded_background
+        return np.where(detected_minima)
+
+
+    #crops to focus on just the ribcage/lungs
+    def crop(self, pixels):
+
+        left_ribs, right_ribs = self.crop_column_indices(pixels)
+
+        #crops columns for easier row prediction
+        pixels = pixels[:, left_ribs:right_ribs]
+
+        # self.dicom_reader.plot_pixel_array(pixels)
+        # print()
+
+        top_ribs, bottom_ribs = self.crop_row_indices(pixels)
+
+        #crops rows for top and bottom of lungs
+        pixels = pixels[top_ribs:bottom_ribs, :]
+
+        # self.dicom_reader.plot_pixel_array(pixels)
+        # print()
+
+        return pixels
+
+
+    #returns 2 index values denoting edge of rib cage on left and right sides
+    def crop_column_indices(self, pixels):
+
+
+        #determines amount to crop inwards so that body is perfectly in frame
+
+        column_intensities = []
+        ## Handles top and bottom ##
+        for x in range(0, pixels.shape[0]):
+
+            #gets average of column's pixel intensity
+            avg = np.average(pixels[:,x])
+            # print(pixels[x])
+            # print(str(x)+": "+str(avg))
+            column_intensities.append(avg)
+
+
+        #converts to numpy array for easier manipulation
+        column_intensities = np.array(column_intensities)
+
+        # plt.plot(column_intensities)
+        # plt.show()
+
+
+
+        threshold = int(pixels.shape[1]*0.2) #20% of image height is the threshold for local extremas
+        print("Threshold: "+str(threshold))
+
+        #gets numpy list of indices of local extremas
+        local_max = self.detect_local_extremas(column_intensities, threshold, "max")[0]
+        print(local_max)
+
+        #gets the middle because of ribs. 
+        middle = pixels.shape[1]/2
+        print("Middle: "+str(middle))
+
+        #gets index of closest maxima to the middle, to denote the ribs. 
+        spine_index = 0
+        for x in range(0, len(local_max)-1):
+            #if middle is between these two maxes
+            if local_max[x]<= middle and local_max[x+1]>middle:
+                #if left max is closer than right max, then consider that the ribs
+                if abs(local_max[x]-middle) < abs(local_max[x+1]-middle):
+                    spine_index = x
+                else:
+                    spine_index = x+1
+
+                break
+
+        print("Spine: "+str(local_max[spine_index]))
+
+        #if couldn't accurately get maximas, then don't crop
+        if spine_index==0 or spine_index==len(local_max)-1:
+            return pixels
+
+        left_ribs = local_max[spine_index-1]
+        right_ribs = local_max[spine_index+1]
+        print("Left ribs: "+str(left_ribs))
+        print("Right ribs: "+str(right_ribs))
+
+        #crop based off ribs location
+        # pixels = pixels[:, left_ribs:right_ribs]
+
+        # return pixels
+
+        return left_ribs, right_ribs
+
+
+    #returns 2 index values denoting edge of rib cage on left and right sides
+    def crop_row_indices(self, pixels):
+
+
+        #determines amount to crop inwards so that body is perfectly in frame
+
+        row_intensities = []
+        ## Handles top and bottom ##
+        for x in range(0, pixels.shape[0]):
+
+            #gets average of column's pixel intensity
+            avg = np.average(pixels[x,:])
+            # print(pixels[x])
+            # print(str(x)+": "+str(avg))
+            row_intensities.append(avg)
+
+
+        #converts to numpy array for easier manipulation
+        row_intensities = np.array(row_intensities)
+
+        
+
+        threshold = int(pixels.shape[0]*0.2) #20% of image height is the threshold for local extremas
+        print("Threshold: "+str(threshold))
+
+        #gets numpy list of indices of local extremas
+        local_max = self.detect_local_extremas(row_intensities, threshold, "max")[0]
+        local_min = self.detect_local_extremas(row_intensities, threshold, "min")[0]
+        print("Local max: "+str(local_max))
+        print("Local min: "+str(local_min))
+
+        #only keep local max's that aren't 0 intensity
+        new_local_max = []
+        for x in range(0, local_max.shape[0]):
+            if row_intensities[local_max[x]]!=0:
+                new_local_max.append(local_max[x])
+        local_max = np.array(new_local_max)
+
+        #only keep local min's that aren't 0 intensity
+        new_local_min = []
+        for x in range(0, local_min.shape[0]):
+            if row_intensities[local_min[x]]!=255:
+                new_local_min.append(local_min[x])
+        local_min = np.array(new_local_min)
+
+        print("Local max: "+str(local_max))
+        print("Local min: "+str(local_min))
+
+
+
+
+        #gets the middle because of lungs. 
+        middle = pixels.shape[0]/2
+        print("Middle: "+str(middle))
+
+        #gets index of closest maxima to the middle, to denote the ribs. 
+        lungs_index = -1
+        for x in range(0, len(local_min)-1):
+            #if middle is between these two mins
+            if local_min[x]<= middle and local_min[x+1]>middle:
+                #if left max is closer than right max, then consider that the ribs
+                # if abs(local_min[x]-middle) < abs(local_min[x+1]-middle):
+                lungs_index = x
+                # else:
+                #     lungs_index = x+1
+
+                break
+
+        if lungs_index==-1:
+            lungs_index = len(local_min)-1
+
+        print("Middle of lungs: "+str(local_min[lungs_index]))
+
+
+        #After finding the middle of the lungs, we can find the top and bottom of the ribs by getting the nearest maxima to this minima
+        top_ribs = 0
+        bottom_ribs = 0
+        for x in range(0, len(local_max)-1):
+            if local_max[x] <= local_min[lungs_index] and local_max[x+1]>local_min[lungs_index]:
+                print("Found max: "+str(local_max[x])+" | "+str(local_max[+1]))
+                top_ribs = local_max[x]
+                #makes sure bottom of the ribs extend beyond middle of the image
+                adding = 1
+                while x+adding<len(local_max) and local_max[x+adding]<middle:
+                    adding+=1
+                bottom_ribs = local_max[x+adding]
+
+        #sets bottom ribsif not found
+        if bottom_ribs==0:
+            bottom_ribs = local_max[-1]
+
+        print("Top ribs: "+str(top_ribs))
+        print("Bottom ribs: "+str(bottom_ribs))
+
+        #leeway for top of ribs
+        top_ribs = max(0, top_ribs-int(pixels.shape[0]*0.05))
+
+
+        # #if couldn't accurately get maximas, then don't crop
+        # if lungs_index==0 or lungs_index==len(local_min)-1:
+        #     return pixels
+
+        # plt.plot(row_intensities)
+        # plt.show()
+
+
+
+        # return pixels
+        return top_ribs, bottom_ribs
+
+
+    #gets a mean of all the training images
+    #this should allow for average lung boundaries to be apparent, and then we can crop based off that
+    def mean_images(self, num_images=50):
+        train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
+
+        train_dicom_paths = train_dicom_paths[:num_images]
+
+        num_added = 0
+
+        # crop_start = 100
+        # crop_end = 900
+
+        # resize_width = 512
+        # resize_height = 512
+
+        #32-bits so that there's no overflow
+        total_pixels = np.zeros((self.image_height, self.image_width), dtype=np.uint32)
+        for i, image_path in enumerate(train_dicom_paths):
+
+            # if i<=16:
+            #     continue
+
+            #extracts image_id from the file path
+            image_id = image_path.split('\\')[-1].replace(".dcm", "")
+            # print("Image id: "+str(image_id))
+
+            # masks = self.data_handler.find_masks(image_id)
+            # if len(masks)==0:
+            #     continue
+
+            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
+
+            # new_path = self.dicom_reader.get_dicom_filtered_train_path()
+            # new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
+
+            # #if shouldn't replace file, and if file exists, then skip preprocessing
+            # if replace==False and os.path.isfile(new_path):
+            #     continue
+
+            pixels = dicom_image.pixel_array
+
+            self.dicom_reader.plot_pixel_array(pixels)
+
+            # pixels = pixels[crop_start:crop_end, crop_start:crop_end]
+            # pixels = cv2.resize(pixels, (resize_height, resize_width))
+
+            pixels = self.crop(pixels)
+
+            # #resizes to original size
+            # pixels = cv2.resize(pixels, (self.image_height, self.image_width))
+
+            # self.dicom_reader.plot_pixel_array(pixels)
+
+
+            # #if first image of mean, start with it
+            # total_pixels += pixels
+            # num_added += 1
+
+
+
+
+
+
+
+            ## Perform preprocessing ##
+            # pixels = np.invert(pixels)
+
+            #resizes to 512x512
+            # pixels = cv2.resize(pixels, (512, 512))
+
+            # pixels = self.edge_filter(pixels)
+
+
+            # self.dicom_reader.plot_pixel_array(pixels)
+
+
+            # im = Image.fromarray(pixels)
+            # im.save(new_path)
+
+                # self.dicom_reader.save_dicom_obj(new_path, dicom_image)
+
+            print("Preprocessed image "+str(i)+"/"+str(len(train_dicom_paths)))
+
+
+        mean_pixels = (total_pixels/num_added)
+        #converts to 0-255 for plotting
+        mean_pixels = mean_pixels.astype(np.uint8)
+
+        # mean_pixels = np.invert(mean_pixels)
+
+        self.dicom_reader.plot_pixel_array(mean_pixels)
 
 
     #performs bulk preprocessing on training images
@@ -310,7 +644,11 @@ class ImagePreprocessor:
 
             #extracts image_id from the file path
             image_id = image_path.split('\\')[-1].replace(".dcm", "")
-            # print("Image id: "+str(image_id))
+            print("Image id: "+str(image_id))
+
+            # masks = self.data_handler.find_masks(image_id)
+            # if len(masks)==0:
+            #     continue
 
             new_path = self.dicom_reader.get_dicom_filtered_train_path()
             new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
@@ -321,9 +659,34 @@ class ImagePreprocessor:
 
             pixels = dicom_image.pixel_array
 
+
+            #crops
+            pixels = self.crop(pixels)
+
+            self.dicom_reader.plot_pixel_array(pixels)
+
+            #resizes to proper size
+            # pixels = cv2.resize(pixels, (self.image_height, self.image_width))
+
             ## Perform preprocessing ##
             pixels = np.invert(pixels)
-            pixels = self.edge_filter(pixels)
+
+            #shrinks width and height by half, thereby shrining entire image by 4x
+            # pixels = cv2.resize(pixels, (0,0), fx=0.5, fy=0.5) 
+
+            # #crops to only show 100-800 and 100-800 pixels
+            # pixels = pixels[100:800, 100:800]
+
+
+            #resizes to 512x512
+            pixels = cv2.resize(pixels, (512, 512))
+
+            # self.dicom_reader.plot_pixel_array(pixels)
+            # pixels = self.edge_filter(pixels)
+            # pixels = self.canny_edge_detector(pixels, high_threshold=0.8, low_threshold=0.5)
+
+
+            # self.dicom_reader.plot_pixel_array(pixels)
 
 
             # kernel_size = 5
@@ -345,10 +708,12 @@ class ImagePreprocessor:
 
 
 
+
+
+
+
             im = Image.fromarray(pixels)
             im.save(new_path)
-
-                # self.dicom_reader.save_dicom_obj(new_path, dicom_image)
 
             print("Preprocessed image "+str(i)+"/"+str(len(train_dicom_paths)))
 
@@ -361,3 +726,4 @@ if __name__=="__main__":
     
     # image_preprocessor.normalize_data()
     image_preprocessor.bulk_preprocessing(replace=True)
+    # image_preprocessor.mean_images(100)

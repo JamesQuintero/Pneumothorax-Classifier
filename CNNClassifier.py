@@ -258,10 +258,12 @@ class CNNClassifier:
 
         CNN_size = 16
         pool_size = (3,3)
-        filter_size = (3,3)
+        filter_size = (5,5)
         CNN_activation = "relu"
         dense_activation = "relu"
         output_activation = "sigmoid"
+        loss = "binary_crossentropy"
+        # loss = "mean_squared_error"
 
         classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), activation = CNN_activation))
 
@@ -309,7 +311,7 @@ class CNNClassifier:
 
         classifier.add(Dense(units = 1, activation = output_activation))
 
-        classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+        classifier.compile(optimizer = 'adam', loss = loss, metrics = ['accuracy'])
 
         classifier.summary()
 
@@ -410,6 +412,7 @@ class CNNClassifier:
         # # here's a more "manual" example
         # for e in range(epochs):
         #     print('Epoch', e)
+
         #     batches = 0
         #     for x_batch, y_batch in datagen.flow(x_train, y_train, batch_size=32):
         #         model.fit(x_batch, y_batch)
@@ -441,12 +444,14 @@ class CNNClassifier:
 
         from sklearn.metrics import confusion_matrix
 
+        batch_size = 10
         validation_generator = DataGenerator(X_validate, Y, batch_size, **params)
 
         #predicts
         preds = classifier.predict_generator(validation_generator)
 
 
+        print("predictions: "+str(preds.shape))
 
 
         #gets actual validation labels
@@ -454,6 +459,7 @@ class CNNClassifier:
         #gets predicted validation labels
         y_predict_non_category = [ t>0.5 for t in preds]
 
+        print("validation: "+str(y_validate_non_category.shape))
         print("Validation labels: "+str(y_validate_non_category[:10]))
         print("Predicted labels: "+str(preds[:10]))
         # print(y_predict_non_category)
