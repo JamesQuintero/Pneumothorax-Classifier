@@ -22,6 +22,7 @@ from keras.layers import *
 from keras.models import load_model
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
+from keras.optimizers import Adam
 
 import imageio
 
@@ -356,25 +357,25 @@ class CNNClassifier:
         #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        # classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        # classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        # classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        # classifier.add(Dropout(0.25))
 
         # # Adding a second convolutional layer
         # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
@@ -411,6 +412,7 @@ class CNNClassifier:
 
     #returns U-net
     #architecture source: https://github.com/yihui-he/u-net
+    # and https://github.com/jocicmarko/ultrasound-nerve-segmentation/
     def create_Unet(self):
 
         start_size = 16
@@ -527,37 +529,40 @@ class CNNClassifier:
         inputs = Input((self.image_width, self.image_height, 1))
         conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(inputs)
         conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv1)
+        conv1 = BatchNormalization()(conv1)
         pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
 
         conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(pool1)
         conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv2)
+        conv2 = BatchNormalization()(conv2)
         pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
 
         conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
         conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
+        conv3 = BatchNormalization()(conv3)
         # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
 
         # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
         # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
 
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
+        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=3)
         # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
         # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
 
-        up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=1)
+        up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
         conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
         conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv8)
+        conv8 = BatchNormalization()(conv8)
 
-        up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=1)
+        up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=3)
         conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(up9)
         conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
+        conv9 = BatchNormalization()(conv9)
 
-        conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
-        # model = Model(input=inputs, output=conv10)
+        # conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
 
-
-
-
+        conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
+        # model = Model(inputs=inputs, outputs=conv10)
 
 
 
@@ -566,12 +571,13 @@ class CNNClassifier:
         dense1 = Flatten()(conv10)
 
         dense2 = Dense(units = 1, activation = output_activation)(dense1)
-        # # # classifier.add(Dropout(0.25))
+        # # # # classifier.add(Dropout(0.25))
 
         
-        model = Model(input=inputs, output=dense2)
+        model = Model(inputs=inputs, outputs=dense2)
 
-        model.compile(optimizer='adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
+        # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
+        model.compile(optimizer=Adam(lr=1e-5), loss="mean_squared_error", metrics=["accuracy"])
 
         model.summary()
 
@@ -581,7 +587,7 @@ class CNNClassifier:
     #trains CNN
     def train(self):
 
-        max_images = 30
+        max_images = 100
         X = self.get_processed_image_paths(balanced=True, max_num=max_images)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
@@ -627,8 +633,8 @@ class CNNClassifier:
         # print()
 
 
-        # classifier = self.create_CNN()
-        classifier = self.create_Unet()
+        classifier = self.create_CNN()
+        # classifier = self.create_Unet()
 
 
 
@@ -708,7 +714,7 @@ class CNNClassifier:
 
         from sklearn.metrics import confusion_matrix
 
-        batch_size = 10
+        batch_size = 1
         validation_generator = DataGenerator(X_validate, Y, batch_size, **params)
 
         #predicts

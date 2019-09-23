@@ -665,16 +665,16 @@ class ImagePreprocessor:
         train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
 
 
-        for i, image_path in enumerate(train_dicom_paths):
+        # for i, image_path in enumerate(train_dicom_paths):
+        for i in range(0, len(train_dicom_paths)):
+            image_path = train_dicom_paths[i]
+
             dicom_image = self.dicom_reader.get_dicom_obj(image_path)
 
             #extracts image_id from the file path
             image_id = image_path.split('\\')[-1].replace(".dcm", "")
             print("Image id: "+str(image_id))
 
-            masks = self.data_handler.find_masks(image_id)
-            if len(masks)==0:
-                continue
 
             new_path = self.dicom_reader.get_dicom_filtered_train_path()
             new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
@@ -682,6 +682,13 @@ class ImagePreprocessor:
             #if shouldn't replace file, and if file exists, then skip preprocessing
             if replace==False and os.path.isfile(new_path):
                 continue
+
+            # #skip non-pneumothorax
+            # masks = self.data_handler.find_masks(image_id)
+            # if len(masks)==0:
+            #     continue
+
+
 
             pixels = dicom_image.pixel_array
 
@@ -710,15 +717,32 @@ class ImagePreprocessor:
             #resizes to 512x512
             pixels = cv2.resize(pixels, (512, 512))
 
+
             # self.dicom_reader.plot_pixel_array(pixels)
             # pixels = self.edge_filter(pixels)
             pixels = self.canny_edge_detector(pixels, high_threshold=0.01, low_threshold=0.01)
 
-            ## Perform preprocessing ##
+
+
+
+            new_image = np.zeros(pixels.shape, pixels.dtype)
+            alpha = 2.0 # Simple contrast control default = 1.0
+            beta = 50    # Simple brightness control default = 0.0
+
+
+            pixels = cv2.convertScaleAbs(pixels, alpha=alpha, beta=beta)
+
+
             pixels = np.invert(pixels)
 
+            # cv2.imshow('Original Image', pixels)
+            # cv2.imshow('New Image', new_image)
 
-            self.dicom_reader.plot_pixel_array(pixels)
+
+            # self.dicom_reader.plot_pixel_array(pixels)
+
+
+
 
 
             # kernel_size = 5
@@ -744,8 +768,8 @@ class ImagePreprocessor:
 
 
 
-            # im = Image.fromarray(pixels)
-            # im.save(new_path)
+            im = Image.fromarray(pixels)
+            im.save(new_path)
 
             print("Preprocessed image "+str(i)+"/"+str(len(train_dicom_paths)))
 
