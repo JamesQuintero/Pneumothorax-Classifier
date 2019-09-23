@@ -14,13 +14,11 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 import keras
+from keras import backend as K
+from keras.layers import Input
 from keras.models import Sequential
-from keras.layers import Convolution2D
-from keras.layers import MaxPooling2D
-from keras.layers import Flatten
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import BatchNormalization
+from keras.models import Model
+from keras.layers import *
 from keras.models import load_model
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
@@ -148,6 +146,7 @@ class CNNClassifier:
 
         #if user wants paths where it's 50% positive, and 50% negative
         if balanced:
+            print("Loading balanced amount of positive and negative targets")
             new_image_paths = []
             negative = []
             positive = []
@@ -324,21 +323,33 @@ class CNNClassifier:
 
         return statistical_measures
 
+
+    def dice_coef(self, y_true, y_pred):
+        smooth = 1.
+        y_true_f = K.flatten(y_true)
+        y_pred_f = K.flatten(y_pred)
+        intersection = K.sum(y_true_f * y_pred_f)
+        return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+
+
+    def dice_coef_loss(self, y_true, y_pred):
+        return 1-self.dice_coef(y_true, y_pred)
+
     #returns CNN
     def create_CNN(self):
         # Initialising the CNN
         classifier = Sequential()
 
         CNN_size = 32
-        pool_size = (5,5)
-        filter_size = (5,5)
+        pool_size = (3,3)
+        filter_size = (3,3)
         CNN_activation = "selu"
         dense_activation = "selu"
         output_activation = "sigmoid"
         # loss = "binary_crossentropy"
         loss = "mean_squared_error"
 
-        classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
 
         # Step 2 - Pooling
         #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
@@ -348,22 +359,28 @@ class CNNClassifier:
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
+        classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(0.25))
+
+        # # Adding a second convolutional layer
+        # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+        # classifier.add(MaxPooling2D(pool_size = pool_size))
+        # # classifier.add(BatchNormalization(axis=3))
+        # classifier.add(Dropout(0.25))
 
         # # Adding a second convolutional layer
         # classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
@@ -384,18 +401,187 @@ class CNNClassifier:
 
         classifier.add(Dense(units = 1, activation = output_activation))
 
-        classifier.compile(optimizer = 'adam', loss = loss, metrics = ['accuracy'])
+        # classifier.compile(optimizer = 'adam', loss = loss, metrics = ['accuracy'])
+        classifier.compile(optimizer = 'adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
 
         classifier.summary()
 
         return classifier
 
 
+    #returns U-net
+    #architecture source: https://github.com/yihui-he/u-net
+    def create_Unet(self):
+
+        start_size = 16
+        pool_size = (2,2)
+        filter_size = (3,3)
+        conv_activation = "selu"
+        dense_activation = "selu"
+        output_activation = "sigmoid"
+        # loss = "mean_squared_error"
+
+        # inputs = Input((self.image_width, self.image_height, 1))
+        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
+        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
+        # pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+
+        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(pool1)
+        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv2)
+        # pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+
+        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool2)
+        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv3)
+        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+
+        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
+        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
+        # pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
+
+        # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool4)
+        # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv5)
+
+
+
+        # # pool5 = MaxPooling2D(pool_size=(2, 2))(conv5)
+
+        # # convdeep = Conv2D(1024, (3, 3), activation='relu', padding='same')(pool5)
+        # # convdeep = Conv2D(1024, (3, 3), activation='relu', padding='same')(convdeep)
+        
+        # # upmid = concatenate([Conv2D(512, (2, 2), activation='relu', padding='same')(UpSampling2D(size=(2, 2))(convdeep)), conv5], axis=1)
+        # # convmid = Conv2D(512, (3, 3), activation='relu', padding='same')(upmid)
+        # # convmid = Conv2D(512, (3, 3), activation='relu', padding='same')(convmid)
+
+
+
+
+        # up6 = concatenate([Conv2D(256, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv5)), conv4], axis=1)
+        # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(up6)
+        # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv6)
+
+        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
+        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
+        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
+
+        # up8 = concatenate([Conv2D(64, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv7)), conv2], axis=1)
+        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(up8)
+        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv8)
+
+        # up9 = concatenate([Conv2D(32, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv8)), conv1], axis=1)
+        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(up9)
+        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv9)
+
+        # conv10 = Convolution2D(1, (1, 1), activation='sigmoid')(conv9)
+        # # model = Model(input=inputs, output=conv10)
+
+
+
+
+
+
+        # inputs = Input((self.image_width, self.image_height, 1))
+        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
+        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
+        # pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+
+        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(pool1)
+        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv2)
+        # pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+
+        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool2)
+        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv3)
+        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+
+        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
+        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
+        # # pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
+
+        # # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool4)
+        # # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv5)
+
+
+
+        # # up6 = concatenate([Conv2D(256, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv5)), conv4], axis=1)
+        # # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(up6)
+        # # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv6)
+
+        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
+        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
+        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
+
+        # up8 = concatenate([Conv2D(64, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv7)), conv2], axis=1)
+        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(up8)
+        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv8)
+
+        # up9 = concatenate([Conv2D(32, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv8)), conv1], axis=1)
+        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(up9)
+        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv9)
+
+        # conv10 = Convolution2D(1, (1, 1), activation='sigmoid')(conv9)
+        # # model = Model(input=inputs, output=conv10)
+
+
+
+
+
+        inputs = Input((self.image_width, self.image_height, 1))
+        conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(inputs)
+        conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv1)
+        pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
+
+        conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(pool1)
+        conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv2)
+        pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
+
+        conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
+        conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
+        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+
+        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
+        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
+
+        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
+        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
+        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
+
+        up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=1)
+        conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
+        conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv8)
+
+        up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=1)
+        conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(up9)
+        conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
+
+        conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
+        # model = Model(input=inputs, output=conv10)
+
+
+
+
+
+
+
+
+
+        dense1 = Flatten()(conv10)
+
+        dense2 = Dense(units = 1, activation = output_activation)(dense1)
+        # # # classifier.add(Dropout(0.25))
+
+        
+        model = Model(input=inputs, output=dense2)
+
+        model.compile(optimizer='adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
+
+        model.summary()
+
+        return model
+
 
     #trains CNN
     def train(self):
 
-        max_images = 100
+        max_images = 30
         X = self.get_processed_image_paths(balanced=True, max_num=max_images)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
@@ -441,8 +627,9 @@ class CNNClassifier:
         # print()
 
 
-        classifier = self.create_CNN()
-        # classifier = self.create_Unet()
+        # classifier = self.create_CNN()
+        classifier = self.create_Unet()
+
 
 
         # # construct the image generator for data augmentation
