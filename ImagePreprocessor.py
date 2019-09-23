@@ -718,6 +718,15 @@ class ImagePreprocessor:
             pixels = cv2.resize(pixels, (512, 512))
 
 
+            intensity_mean = np.mean(pixels)
+            intensity_median = np.median(pixels)
+
+            print("Mean: "+str(intensity_mean))
+            print("Median: "+str(intensity_median))
+
+
+
+
             # self.dicom_reader.plot_pixel_array(pixels)
             # pixels = self.edge_filter(pixels)
             pixels = self.canny_edge_detector(pixels, high_threshold=0.01, low_threshold=0.01)
@@ -725,15 +734,23 @@ class ImagePreprocessor:
 
 
 
-            new_image = np.zeros(pixels.shape, pixels.dtype)
-            alpha = 2.0 # Simple contrast control default = 1.0
-            beta = 50    # Simple brightness control default = 0.0
+            #brighten image if its mean intensity is too low
+            if intensity_mean<150:
+                alpha = 2.0 # Simple contrast control default = 1.0
+                beta = 0    # Simple brightness control default = 0.0
 
 
-            pixels = cv2.convertScaleAbs(pixels, alpha=alpha, beta=beta)
+                pixels = cv2.convertScaleAbs(pixels, alpha=alpha, beta=beta)
+                # for y in range(pixels.shape[0]):
+                #     for x in range(pixels.shape[1]):
+                #             pixels[y,x] = np.clip(alpha*pixels[y,x] + beta, 0, 255)
 
 
-            pixels = np.invert(pixels)
+
+            
+
+
+            # pixels = np.invert(pixels)
 
             # cv2.imshow('Original Image', pixels)
             # cv2.imshow('New Image', new_image)
