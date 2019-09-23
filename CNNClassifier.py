@@ -7,6 +7,7 @@ from mask_functions import rle2mask
 
 import sys
 import os
+import random
 
 #ML libraries
 import numpy as np
@@ -37,8 +38,8 @@ Handles CNN training, validation, and testing
 """
 class CNNClassifier:
 
-    image_width = 1024
-    image_height = 1024
+    image_width = 512
+    image_height = 512
 
     dicom_reader = None
     data_handler = None
@@ -141,12 +142,84 @@ class CNNClassifier:
 
 
     #returns list of paths to processed image files
-    def get_processed_image_paths(self, max_num=None):
+    def get_processed_image_paths(self, balanced=False, max_num=None):
         image_paths = self.dicom_reader.load_filtered_dicom_train_paths()
 
-        #if no max, set max to the number of train items
-        if max_num!=None:
-            image_paths = image_paths[:max_num]
+
+        #if user wants paths where it's 50% positive, and 50% negative
+        if balanced:
+            new_image_paths = []
+            negative = []
+            positive = []
+
+            for i in range(0, len(image_paths)):
+                image_path = image_paths[i]
+
+                #extracts image_id from the file path
+                image_id = image_paths[i].split('\\')[-1].replace("."+str(self.image_preprocessor.preprocessed_ext), "")
+                # print("Image id: "+str(image_id))
+
+                masks = self.data_handler.find_masks(image_id=image_id)
+
+                #if non-pneumothorax
+                if len(masks)==0:
+                    if (max_num==None and len(negative)<int(len(image_paths)/2)) or (max_num!=None and len(negative)<int(max_num/2)):
+                        negative.append(image_path)
+                        print("Loaded negative signal")
+                #if pneumothorax
+                else:
+                    if (max_num==None and len(positive)<int(len(image_paths)/2)) or (max_num!=None and len(positive)<int(max_num/2)):
+                        positive.append(image_path)
+                        print("Loaded positive signal")
+
+                #if found enough
+                if max_num!=None and len(positive)+len(negative)>=max_num:
+                    break
+
+                # print("Num negative: "+str(len(negative))+" | Num positive: "+str(len(positive)))
+
+            #resize negative and positive arrays to match each other
+            if len(positive)>len(negative):
+                positive = positive[:len(negative)]
+            elif len(positive)<len(negative):
+                negative = negative[:len(positive)]
+
+            # print("Num positive: "+str(len(positive)))
+            # print("Num negative: "+str(len(negative)))
+
+            #adds each side randomly 
+            print("Shuffling inputs")
+            x = 0
+            y = 0
+            random.seed(12345)
+            while x<len(positive) and y<len(negative):
+                #choose positive or negative randomly
+                rand_num = random.random()
+                if rand_num<0.5:
+                    new_image_paths.append(positive[x])
+                    x+=1
+                    # print("Random positive")
+                else:
+                    new_image_paths.append(negative[y])
+                    y+=1
+                    # print("Random negative")
+
+            #if not all the positive symbols were able to be added, add the rest
+            if x<len(positive):
+                new_image_paths.extend(positive[x:])
+            elif y<len(negative):
+                new_image_paths.extend(negative[y:])
+
+            # print("Num images: "+str(len(new_image_paths)))
+
+            image_paths = new_image_paths
+
+
+        #if user doesn't want an explicit balance of positive and negative signals
+        else:
+            #if no max, set max to the number of train items
+            if max_num!=None:
+                image_paths = image_paths[:max_num]
 
         return image_paths
 
@@ -256,14 +329,14 @@ class CNNClassifier:
         # Initialising the CNN
         classifier = Sequential()
 
-        CNN_size = 16
-        pool_size = (3,3)
+        CNN_size = 32
+        pool_size = (5,5)
         filter_size = (5,5)
-        CNN_activation = "relu"
-        dense_activation = "relu"
+        CNN_activation = "selu"
+        dense_activation = "selu"
         output_activation = "sigmoid"
-        loss = "binary_crossentropy"
-        # loss = "mean_squared_error"
+        # loss = "binary_crossentropy"
+        loss = "mean_squared_error"
 
         classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), activation = CNN_activation))
 
@@ -322,9 +395,12 @@ class CNNClassifier:
     #trains CNN
     def train(self):
 
-        max_images = 1000
-        X = self.get_processed_image_paths(max_images)
+        max_images = 100
+        X = self.get_processed_image_paths(balanced=True, max_num=max_images)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+
+        # return
 
 
 
@@ -366,6 +442,7 @@ class CNNClassifier:
 
 
         classifier = self.create_CNN()
+        # classifier = self.create_Unet()
 
 
         # # construct the image generator for data augmentation
@@ -380,10 +457,10 @@ class CNNClassifier:
 
 
         # Parameters
-        params = {'dim': (1024,1024,1),
+        params = {'dim': (self.image_height,self.image_width,1),
                   'shuffle': True}
 
-        batch_size = 30
+        batch_size = 10
         training_generator = DataGenerator(X_train, Y, batch_size, **params)
 
 
