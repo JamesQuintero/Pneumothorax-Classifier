@@ -11,15 +11,17 @@ import random
 
 #ML libraries
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import MinMaxScaler
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import confusion_matrix
 import keras
 from keras import backend as K
 from keras.layers import Input
 from keras.models import Sequential
 from keras.models import Model
-from keras.layers import *
 from keras.models import load_model
+
+from keras.layers import *
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
@@ -51,8 +53,15 @@ class CNNClassifier:
 
 
     #returns list of paths to processed image files
-    def get_processed_image_paths(self, balanced=False, max_num=None):
-        image_paths = self.dicom_reader.load_filtered_dicom_train_paths()
+    def get_processed_image_paths(self, dataset_type="train", balanced=False, max_num=None):
+
+        if dataset_type.lower() == "train":
+            image_paths = self.dicom_reader.load_filtered_dicom_train_paths()
+        elif dataset_type.lower() == "test":
+            image_paths = self.dicom_reader.load_filtered_dicom_test_paths()
+
+        # print("Len image paths: "+str(len(image_paths)))
+        # return
 
 
         #if user wants paths where it's 50% positive, and 50% negative
@@ -66,7 +75,8 @@ class CNNClassifier:
                 image_path = image_paths[i]
 
                 #extracts image_id from the file path
-                image_id = image_paths[i].split('\\')[-1].replace("."+str(self.image_preprocessor.preprocessed_ext), "")
+                # image_id = image_paths[i].split('\\')[-1].replace("."+str(self.image_preprocessor.preprocessed_ext), "")
+                image_id = self.dicom_reader.extract_image_id(image_paths[i], self.image_preprocessor.preprocessed_ext)
                 # print("Image id: "+str(image_id))
 
                 masks = self.data_handler.find_masks(image_id=image_id)
@@ -494,10 +504,60 @@ class CNNClassifier:
         return model
 
 
-    #trains CNN
-    def train(self):
 
-        max_images = 200
+    #predicts on the dataset, and prints a confusion matrix of the results
+    def predict(self, classifier, feature_dataset, full_label_dataset, batch_size=1):
+
+        #Validation prediction
+        params = {'dim': (self.image_height,self.image_width,1),
+                  'augment': False,
+                  'shuffle': True}
+        generator = DataGenerator(feature_dataset, full_label_dataset, batch_size, **params)
+        preds = classifier.predict_generator(generator)
+
+
+        print("predictions: "+str(preds.shape))
+
+
+        #gets actual labels
+        X_images, y_non_category = generator.get_processed_images(start=0, end=len(feature_dataset))
+        #gets predicted labels
+        y_predict_non_category = [ t>0.5 for t in preds]
+
+        print("dataset: "+str(y_non_category.shape))
+        print("dataset labels: "+str(y_non_category[:10]))
+        print("Predicted labels: "+str(preds[:10]))
+        # print(y_predict_non_category)
+
+        #calculates confusion matrix
+        conf_matrix = confusion_matrix(y_non_category, y_predict_non_category)
+        print("Confusion matrix: ")
+        print(conf_matrix)
+
+        print()
+        stats = self.calculate_statistical_measures(conf_matrix)
+
+        # for measure in stats:
+        #     print(str(measure)+": "+str(stats[measure]))
+
+        print("Accuracy: "+str(stats['accuracy']))
+        print()
+        print("False Positive Rate: "+str(stats['FPR']))
+        print("False Negative Rate: "+str(stats['FNR']))
+        print()
+        print("Specificity: "+str(stats['specificity']))
+        print("Sensitivity: "+str(stats['sensitivity']))
+        print("Total (specificity + sensitivity): "+str(stats['total']))
+        print()
+        print("ROC: "+str(stats['ROC']))
+        print("F1: "+str(stats['F1']))
+        print("MCC: "+str(stats['MCC']))
+
+
+    #trains CNN
+    def train(self, dataset_size=100):
+
+        max_images = dataset_size
         X = self.get_processed_image_paths(balanced=True, max_num=max_images)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
@@ -626,51 +686,7 @@ class CNNClassifier:
 
 
 
-        from sklearn.metrics import confusion_matrix
-
-        batch_size = 1
-        params['augment'] = False
-        validation_generator = DataGenerator(X_validate, Y, batch_size, **params)
-
-        #predicts
-        preds = classifier.predict_generator(validation_generator)
-
-
-        print("predictions: "+str(preds.shape))
-
-
-        #gets actual validation labels
-        X_validate_images, y_validate_non_category = validation_generator.get_processed_images(start=0, end=len(X_validate))
-        #gets predicted validation labels
-        y_predict_non_category = [ t>0.5 for t in preds]
-
-        print("validation: "+str(y_validate_non_category.shape))
-        print("Validation labels: "+str(y_validate_non_category[:10]))
-        print("Predicted labels: "+str(preds[:10]))
-        # print(y_predict_non_category)
-
-        #calculates confusion matrix
-        conf_matrix = confusion_matrix(y_validate_non_category, y_predict_non_category)
-        print("Confusion matrix: "+str(conf_matrix))
-
-        print()
-        stats = self.calculate_statistical_measures(conf_matrix)
-
-        # for measure in stats:
-        #     print(str(measure)+": "+str(stats[measure]))
-
-        print("Accuracy: "+str(stats['accuracy']))
-        print()
-        print("False Positive Rate: "+str(stats['FPR']))
-        print("False Negative Rate: "+str(stats['FNR']))
-        print()
-        print("Specificity: "+str(stats['specificity']))
-        print("Sensitivity: "+str(stats['sensitivity']))
-        print("Total (specificity + sensitivity): "+str(stats['total']))
-        print()
-        print("ROC: "+str(stats['ROC']))
-        print("F1: "+str(stats['F1']))
-        print("MCC: "+str(stats['MCC']))
+        self.predict(feature_dataset=X_validate, full_label_dataset=Y, batch_size=10)
 
 
 
@@ -680,11 +696,30 @@ class CNNClassifier:
 
 
 
+    #performs predictions and subsequent statistic calculations on unofficial test dataset
+    def test(self, dataset_size=100):
+        max_images = dataset_size
+        X = self.get_processed_image_paths(dataset_type="test", balanced=False, max_num=max_images)
+        Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+
+        # print("X: "+str(X))
+
+        #loads the model
+        classifier = load_model("./trained_models/cnn_model.h5")
+
+
+
+        self.predict(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=10)
+
+
 
 
 if __name__=="__main__":
     CNN_classifier = CNNClassifier()
 
-    CNN_classifier.train()
+    # CNN_classifier.train(dataset_size=200)
+
+    CNN_classifier.test(dataset_size=300)
     
     # CNN_classifier.get_unprocessed_feature_target_images()

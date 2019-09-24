@@ -1,6 +1,6 @@
 Ideas: 
 
-Augment images by rotating, shearing, mirror, etc. 
+Done - Augment images by rotating, shearing, mirror, etc. 
 
 *) Multiple images thresholded to different levels, so that if the line of pneumothorax is dimmer than the ribs, it can still be count if the threshold is high enough. Because each case is different. 
 

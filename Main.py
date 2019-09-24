@@ -86,6 +86,9 @@ class Main:
 
         self.image_preprocessor.bulk_preprocessing(replace)
 
+
+        
+
 if __name__=="__main__":
     main = Main()
 

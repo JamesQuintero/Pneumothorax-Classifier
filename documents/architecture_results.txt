@@ -1036,4 +1036,104 @@ ROC: -0.0458906967042
 F1: 0.0701754385965
 MCC: -0.0956288931903
 
-____________________________________________
+______________________
+
+
+-- CNN New image filtering--
+X_train: 140
+X_validate: 40
+_________________________________________________________________
+Layer (type)                 Output Shape              Param #
+=================================================================
+conv2d_1 (Conv2D)            (None, 512, 512, 32)      320
+_________________________________________________________________
+max_pooling2d_1 (MaxPooling2 (None, 170, 170, 32)      0
+_________________________________________________________________
+dropout_1 (Dropout)          (None, 170, 170, 32)      0
+_________________________________________________________________
+conv2d_2 (Conv2D)            (None, 170, 170, 32)      9248
+_________________________________________________________________
+max_pooling2d_2 (MaxPooling2 (None, 56, 56, 32)        0
+_________________________________________________________________
+dropout_2 (Dropout)          (None, 56, 56, 32)        0
+_________________________________________________________________
+conv2d_3 (Conv2D)            (None, 56, 56, 32)        9248
+_________________________________________________________________
+max_pooling2d_3 (MaxPooling2 (None, 18, 18, 32)        0
+_________________________________________________________________
+dropout_3 (Dropout)          (None, 18, 18, 32)        0
+_________________________________________________________________
+conv2d_4 (Conv2D)            (None, 18, 18, 32)        9248
+_________________________________________________________________
+max_pooling2d_4 (MaxPooling2 (None, 6, 6, 32)          0
+_________________________________________________________________
+dropout_4 (Dropout)          (None, 6, 6, 32)          0
+_________________________________________________________________
+flatten_1 (Flatten)          (None, 1152)              0
+_________________________________________________________________
+dense_1 (Dense)              (None, 128)               147584
+_________________________________________________________________
+dropout_5 (Dropout)          (None, 128)               0
+_________________________________________________________________
+dense_2 (Dense)              (None, 1)                 129
+=================================================================
+Total params: 175,777
+Trainable params: 175,777
+Non-trainable params: 0
+_________________________________________________________________
+Epoch 1/10
+2019-09-24 12:49:39.410943: I C:\users\nwani\_bazel_nwani\swultrt5\execroot\org_tensorflow\tensorflow\core\platform\cpu_feature_guard.cc:140] Your CPU supports instructions that this TensorFlow binary was not compiled to use: AVX AVX2
+2019-09-24 12:49:40.070173: E C:\users\nwani\_bazel_nwani\swultrt5\execroot\org_tensorflow\tensorflow\stream_executor\cuda\cuda_driver.cc:406] failed call to cuInit: CUDA_ERROR_NO_DEVICE
+2019-09-24 12:49:40.083832: I C:\users\nwani\_bazel_nwani\swultrt5\execroot\org_tensorflow\tensorflow\stream_executor\cuda\cuda_diagnostics.cc:158] retrieving CUDA diagnostic information for host: DESKTOP-R375LPM
+2019-09-24 12:49:40.092984: I C:\users\nwani\_bazel_nwani\swultrt5\execroot\org_tensorflow\tensorflow\stream_executor\cuda\cuda_diagnostics.cc:165] hostname: DESKTOP-R375LPM
+14/14 [==============================] - 133s 9s/step - loss: 0.2728 - acc: 0.5464
+Epoch 2/10
+14/14 [==============================] - 121s 9s/step - loss: 0.2836 - acc: 0.5071
+Epoch 3/10
+14/14 [==============================] - 121s 9s/step - loss: 0.2468 - acc: 0.6214
+Epoch 4/10
+14/14 [==============================] - 127s 9s/step - loss: 0.2566 - acc: 0.5964
+Epoch 5/10
+14/14 [==============================] - 120s 9s/step - loss: 0.2422 - acc: 0.5821
+Epoch 6/10
+14/14 [==============================] - 116s 8s/step - loss: 0.2407 - acc: 0.6179
+Epoch 7/10
+14/14 [==============================] - 123s 9s/step - loss: 0.2151 - acc: 0.6500
+Epoch 8/10
+14/14 [==============================] - 128s 9s/step - loss: 0.2144 - acc: 0.6857
+Epoch 9/10
+14/14 [==============================] - 125s 9s/step - loss: 0.2258 - acc: 0.6536
+Epoch 10/10
+14/14 [==============================] - 130s 9s/step - loss: 0.1940 - acc: 0.7179
+predictions: (40, 1)
+validation: (40,)
+Validation labels: [1 1 0 1 1 1 1 0 0 0]
+Predicted labels: [[ 0.06056375]
+ [ 0.04771669]
+ [ 0.03195551]
+ [ 0.06289692]
+ [ 0.86367601]
+ [ 0.16633366]
+ [ 0.33578229]
+ [ 0.3135263 ]
+ [ 0.07066801]
+ [ 0.33701408]]
+Confusion matrix: [[14  0]
+ [19  7]]
+
+Accuracy: 0.525
+
+False Positive Rate: 0.0
+False Negative Rate: 0.730769230769
+
+Specificity: 1.0
+Sensitivity: 0.269230769231
+Total (specificity + sensitivity): 1.26923076923
+
+ROC: 0.269230769231
+F1: 0.424242424242
+MCC: 0.33796318471
+
+
+
+

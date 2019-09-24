@@ -4,6 +4,7 @@ from pydicom.encaps import encapsulate
 import matplotlib.pyplot as plt #for displaying DICOM files
 import pandas as pd #for reading data files
 import os
+import shutil
 
 from mask_functions import rle2mask
 
@@ -24,8 +25,10 @@ class DICOMReader:
     data_handler = None
 
     #path variables
-    dicom_train_path = "./data/dicom-images-train/*/*/*.dcm"
+    dicom_train_path = "./data/dicom-images-train/"
     dicom_filtered_train_path = "./data/dicom-images-train-filtered/"
+    dicom_test_path = "./data/dicom-images-test-unofficial/"
+    dicom_filtered_test_path = "./data/dicom-images-test-unofficial-filtered/"
 
     def __init__(self):
         self.data_handler = DataHandler()
@@ -166,9 +169,9 @@ class DICOMReader:
     #returns list of paths that point to dicom training images
     def load_dicom_train_paths(self):
         try:
-            train_fns = glob.glob(self.dicom_train_path)
+            train_fns = glob.glob(self.dicom_train_path+"/*/*/*.dcm")
         except Exception as error:
-            print("load_dicom_train_objects() error: "+str(error))
+            print("load_dicom_train_paths() error: "+str(error))
             return []
 
         return train_fns
@@ -178,18 +181,42 @@ class DICOMReader:
         try:
             train_fns = glob.glob(self.dicom_filtered_train_path+"/*png")
         except Exception as error:
-            print("load_dicom_train_objects() error: "+str(error))
+            print("load_filtered_dicom_train_paths() error: "+str(error))
             return []
 
         return train_fns
+
+    #returns list of paths that point to dicom training images
+    def load_dicom_test_paths(self):
+        try:
+            test_fns = glob.glob(self.dicom_test_path+"/*.dcm")
+        except Exception as error:
+            print("load_dicom_test_paths() error: "+str(error))
+            return []
+
+        return test_fns
+
+    #rerturns list of paths that point to filtered training images
+    def load_filtered_dicom_test_paths(self):
+        try:
+            test_fns = glob.glob(self.dicom_filtered_test_path+"/*png")
+        except Exception as error:
+            print("load_filtered_dicom_test_paths() error: "+str(error))
+            return []
+
+        return test_fns
 
 
     #returns dicom object stored at path
     def get_dicom_obj(self, path):
 
-        #if the file doesn't exist, return None
-        if os.path.isfile(path)==False:
-            return None
+
+        ### This is commented out because on Windows, os.path.isfile returns false no matter what if the path is > 260 characters. 
+        ### This is unpatched as of Python 3.7
+        # #if the file doesn't exist, return None
+        # if os.path.isfile(path)==False:
+        #     print("File doesn't exist")
+        #     return None
 
         try:
             # dataset = pydicom.read_file(path)
@@ -199,12 +226,56 @@ class DICOMReader:
             print("get_dicom_obj() error: "+str(error))
             return None
 
-    # def rewrite_dicom_obj(self, path, dicom_image, pixels):
-    #     pydicom.dcmwrite(path, dicom_image)
+
+    #moves all dcm files from one dataset to the other, without the extra nested folders that causes problems on Windows
+    def move_all_dcm_files(self, dataset_type_from, dataset_type_to):
+
+        if dataset_type_from.lower() == "train":
+            from_paths = self.load_dicom_train_paths()
+        elif dataset_type_from.lower() == "test":
+            from_paths = self.load_dicom_test_paths()
+
+        if dataset_type_to.lower() == "train":
+            to_path = self.dicom_train_path
+        elif dataset_type_to.lower() == "test":
+            to_path = self.dicom_test_path
+
+
+        print("To path: "+str(to_path))
+        for x in range(0, len(from_paths)):
+            print("From path: "+str(from_paths[x]))
+
+            # #gets imageid from file path
+            # image_id = self.extract_image_id(from_paths[x])
+            # print("Image id: "+str(image_id))
+
+        
+            
+
+            try:
+                #uses copy2 instead of copy so that metadata is also copied
+                shutil.copy2(from_paths[x], to_path)
+            except Exception as error:
+                pass
+
+            
+
+            # return
+
+    def extract_image_id(self, path, ext="dcm"):
+        #extracts image_id from the file path
+        try:
+            return path.split('\\')[-1].replace("."+str(ext), "")
+        except Exception as error:
+            print("Error extracting image id: "+str(error))
+            return ""
 
 
     def get_dicom_filtered_train_path(self):
         return self.dicom_filtered_train_path
+
+    def get_dicom_filtered_test_path(self):
+        return self.dicom_filtered_test_path
 
 
 
@@ -212,4 +283,5 @@ if __name__=="__main__":
 
     dicom_reader = DICOMReader()
 
-    dicom_reader.display_masks()
+    # dicom_reader.display_masks()
+    dicom_reader.move_all_dcm_files("train", "test")

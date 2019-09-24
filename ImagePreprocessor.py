@@ -72,10 +72,19 @@ class ImagePreprocessor:
 
 
 
-        train_normalized = train/255
-        validate_normalized = validate/255
-        test_normalized = test/255
+        # train_normalized = train/255
+        # validate_normalized = validate/255
+        # test_normalized = test/255
 
+        mean = np.mean(train)
+        std = np.std(train)
+
+        # Subtract it equally from all splits
+        train_normalized = (train - mean) / std
+
+        validate_normalized = (validate - mean)/std
+
+        test_normalized = (test - mean)/std
 
 
         return train_normalized, validate_normalized, test_normalized, scaler
@@ -592,8 +601,11 @@ class ImagePreprocessor:
             # if i<=16:
             #     continue
 
-            #extracts image_id from the file path
-            image_id = image_path.split('\\')[-1].replace(".dcm", "")
+            # #extracts image_id from the file path
+            # image_id = image_path.split('\\')[-1].replace(".dcm", "")
+            image_id = self.dicom_reader.extract_image_id(image_path)
+
+
             # print("Image id: "+str(image_id))
 
             # masks = self.data_handler.find_masks(image_id)
@@ -664,15 +676,21 @@ class ImagePreprocessor:
 
 
     #performs bulk preprocessing on training images
-    def bulk_preprocessing(self, replace=True):
+    def bulk_preprocessing(self, dataset_type="train", replace=True):
 
-        train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
+        if dataset_type.lower() == "train":
+            dicom_paths = self.dicom_reader.load_dicom_train_paths()
+        elif dataset_type.lower() == "test":
+            dicom_paths = self.dicom_reader.load_dicom_test_paths()
+
+        # print("Num dicom paths: "+str(len(dicom_paths)))
 
 
         # for i, image_path in enumerate(train_dicom_paths):
-        for i in range(0, len(train_dicom_paths)):
-            image_path = train_dicom_paths[i]
+        for i in range(0, len(dicom_paths)):
+            image_path = dicom_paths[i]
 
+            print("Image path: "+str(image_path))
             dicom_image = self.dicom_reader.get_dicom_obj(image_path)
 
             #extracts image_id from the file path
@@ -680,8 +698,14 @@ class ImagePreprocessor:
             print("Image id: "+str(image_id))
 
 
-            new_path = self.dicom_reader.get_dicom_filtered_train_path()
+            if dataset_type.lower() == "train":
+                new_path = self.dicom_reader.get_dicom_filtered_train_path()
+            elif dataset_type.lower() == "test":
+                new_path = self.dicom_reader.get_dicom_filtered_test_path()
+
             new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
+
+            print("New path: "+str(new_path))
 
             #if shouldn't replace file, and if file exists, then skip preprocessing
             if replace==False and os.path.isfile(new_path):
@@ -806,7 +830,7 @@ class ImagePreprocessor:
             im = Image.fromarray(pixels)
             im.save(new_path)
 
-            print("Preprocessed image "+str(i)+"/"+str(len(train_dicom_paths)))
+            print("Preprocessed image "+str(i)+"/"+str(len(dicom_paths)))
 
 
 
@@ -816,5 +840,5 @@ if __name__=="__main__":
     image_preprocessor = ImagePreprocessor()
     
     # image_preprocessor.normalize_data()
-    image_preprocessor.bulk_preprocessing(replace=True)
+    image_preprocessor.bulk_preprocessing(dataset_type="test", replace=False)
     # image_preprocessor.mean_images(100)
