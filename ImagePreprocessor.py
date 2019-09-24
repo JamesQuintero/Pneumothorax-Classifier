@@ -258,7 +258,11 @@ class ImagePreprocessor:
         #only considers important edges
         # threshold_image = self.threshold(image_smoothed, strong_pixel, weak_pixel, high_threshold, low_threshold)
 
-        ret, threshold_image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+
+
+        ret, threshold_image = cv2.threshold(image, weak_pixel, strong_pixel, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
 
         # # #edge tracking
         # edge_tracking = self.hysteresis(image, strong_pixel, weak_pixel)
@@ -729,9 +733,23 @@ class ImagePreprocessor:
 
             # self.dicom_reader.plot_pixel_array(pixels)
             # pixels = self.edge_filter(pixels)
-            pixels = self.canny_edge_detector(pixels, high_threshold=0.01, low_threshold=0.01)
+
+            strong_pixel = 255
+            edged_image = self.canny_edge_detector(image=pixels, weak_pixel=75, strong_pixel=strong_pixel)
+
+            #while the mean pixel intensity is too low, then lower the strength of the edge detector to include more pixels
+            while np.mean(edged_image)<30 and strong_pixel>0:
+                strong_pixel = max(0, strong_pixel-50)
+                edged_image = self.canny_edge_detector(image=pixels, weak_pixel=75, strong_pixel=strong_pixel)
 
 
+            pixels = edged_image
+
+            new_intensity_mean = np.mean(pixels)
+            new_intensity_median = np.median(pixels)
+
+            print("Edged Mean: "+str(new_intensity_mean))
+            print("Edged Median: "+str(new_intensity_median))
 
 
             #brighten image if its mean intensity is too low

@@ -49,96 +49,6 @@ class CNNClassifier:
         self.data_handler = DataHandler()
         self.image_preprocessor = ImagePreprocessor()
 
-    # #returns 1024x1024 raw pixel data of feature dicom images
-    # # feature images will have pixel intensities
-    # # target images will have binary denoting masks of pneumothorax
-    # def get_unprocessed_feature_target_images(self, max_num=None):
-    #     image_height = self.image_height
-    #     image_width = self.image_width
-    #     image_channels = 1
-
-
-    #     train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
-
-    #     #if no max, set max to the number of train items
-    #     if max_num==None:
-    #         max_num = len(train_dicom_paths)
-    #     #limit number of training images to max_num
-    #     else:
-    #         train_dicom_paths = train_dicom_paths[:max_num]
-
-
-
-    #     df_full = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
-
-
-    #     #initialize feature and target images to zeroes
-    #     X_train = np.zeros((len(train_dicom_paths), image_height, image_width, image_channels), dtype=np.uint8) #is type 8-bit for pixel intensity values
-    #     # Y_train = np.zeros((len(train_dicom_paths), image_height, image_width, 1), dtype=np.bool) #is type bool because if pixel is 1, there is mask, 0 otherwise
-    #     Y_train = np.zeros((len(train_dicom_paths)), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
-
-
-
-    #     print('Getting train images and masks ... ')
-    #     sys.stdout.flush() #?
-
-
-    #     # for n, _id in tqdm_notebook(enumerate(train_dicom_paths), total=len(train_dicom_paths)):
-
-    #     for i, image_path in enumerate(train_dicom_paths):
-    #         dicom_image = self.dicom_reader.get_dicom_obj(image_path)
-
-    #         #extracts image_id from the file path
-    #         image_id = image_path.split('\\')[-1].replace(".dcm", "")
-    #         print("Image id: "+str(image_id))
-
-    #         # print("Shape: "+str(dicom_image.pixel_array.shape))
-
-    #         # #apply dicom pixels
-    #         X_train[i] = np.expand_dims(dicom_image.pixel_array, axis=2)
-
-    #         masks = self.data_handler.find_masks(image_id=image_id, dataset=df_full)
-
-    #         print("Num masks: "+str(len(masks)))
-    #         # input()
-    #         # continue
-
-
-    #         try:
-    #             #if no masks for image, then skip
-    #             if len(masks)==0:
-    #                 continue
-    #             else:
-    #                 # if type(df_full.loc[_id.split('/')[-1][:-4],' EncodedPixels']) == str:
-    #                 last_mask = masks[-1]
-
-    #                 ## To do:
-    #                 ##   Account for all masks found 
-    #                 ## 
-
-    #                 #converts to boolean
-    #                 # Y_train[i] = np.expand_dims(rle2mask(last_mask, image_height, image_width), axis=2)
-
-
-    #                 Y_train[i] = 1
-
-
-    #         except KeyError:
-    #             print("Key {_id.split('/')[-1][:-4]} without mask, assuming healthy patient.")
-    #             # Y_train[n] = np.zeros((image_height, image_width, 1)) # Assume missing masks are empty masks.
-    #             Y_train[i] = 0
-
-
-    #     # #plots the scans and their masks
-    #     # for x in range(0, len(X_train)):
-    #     #     self.dicom_reader.plot_dicom(X_train[x], Y_train[x])
-
-    #     print("X_train size: "+str(len(X_train)))
-    #     print("Y_train size: "+str(len(Y_train)))
-
-
-    #     return X_train, Y_train
-
 
     #returns list of paths to processed image files
     def get_processed_image_paths(self, balanced=False, max_num=None):
@@ -226,10 +136,6 @@ class CNNClassifier:
 
 
 
-    #just to make sure a series of data isn't related to each other and mistraining the model
-    def randomize_data(self):
-        pass
-
     #returns statistical measures related to confusion matrix
     def calculate_statistical_measures(self, confusion_matrix):
         statistical_measures = {}
@@ -293,7 +199,7 @@ class CNNClassifier:
         #https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
         try:
             MCC = (TP*TN - FP*FN)/np.sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
-        except:
+        except Exception as error:
             MCC = 0
         statistical_measures['MCC'] = MCC
 
@@ -309,6 +215,10 @@ class CNNClassifier:
         #False Positive Rate (FPR) (Fall-Out)
         FPR = 1 - specificity
         statistical_measures['FPR'] = FPR
+
+        #False Negative Rate (FNR)
+        FNR = 1 - sensitivity
+        statistical_measures['FNR'] = FNR
 
         #both TPR (sensitivity) and FPR (100-Specificity) are used to plot the ROC (Receiver Operating Characteristic) curve
         #https://www.medcalc.org/manual/roc-curves.php
@@ -357,25 +267,25 @@ class CNNClassifier:
         #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
+        classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
+        classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
+        classifier.add(Dropout(0.25))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
+        classifier.add(Dropout(0.25))
 
         # # Adding a second convolutional layer
         # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
@@ -402,8 +312,8 @@ class CNNClassifier:
 
         classifier.add(Dense(units = 1, activation = output_activation))
 
-        # classifier.compile(optimizer = 'adam', loss = loss, metrics = ['accuracy'])
-        classifier.compile(optimizer = 'adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
+        classifier.compile(optimizer = 'adam', loss = loss, metrics = ['accuracy'])
+        # classifier.compile(optimizer = 'adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
 
         classifier.summary()
 
@@ -587,7 +497,7 @@ class CNNClassifier:
     #trains CNN
     def train(self):
 
-        max_images = 100
+        max_images = 200
         X = self.get_processed_image_paths(balanced=True, max_num=max_images)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
@@ -651,15 +561,19 @@ class CNNClassifier:
 
         # Parameters
         params = {'dim': (self.image_height,self.image_width,1),
+                  'augment': True,
                   'shuffle': True}
 
         batch_size = 10
         training_generator = DataGenerator(X_train, Y, batch_size, **params)
 
 
+        # return
+
+
 
         #trains
-        epochs = 5
+        epochs = 10
 
         # #normal training
         # classifier.fit(X_train_normalized, Y_train,
@@ -715,6 +629,7 @@ class CNNClassifier:
         from sklearn.metrics import confusion_matrix
 
         batch_size = 1
+        params['augment'] = False
         validation_generator = DataGenerator(X_validate, Y, batch_size, **params)
 
         #predicts
@@ -739,10 +654,23 @@ class CNNClassifier:
         print("Confusion matrix: "+str(conf_matrix))
 
         print()
-        statistical_measures = self.calculate_statistical_measures(conf_matrix)
+        stats = self.calculate_statistical_measures(conf_matrix)
 
-        for measure in statistical_measures:
-            print(str(measure)+": "+str(statistical_measures[measure]))
+        # for measure in stats:
+        #     print(str(measure)+": "+str(stats[measure]))
+
+        print("Accuracy: "+str(stats['accuracy']))
+        print()
+        print("False Positive Rate: "+str(stats['FPR']))
+        print("False Negative Rate: "+str(stats['FNR']))
+        print()
+        print("Specificity: "+str(stats['specificity']))
+        print("Sensitivity: "+str(stats['sensitivity']))
+        print("Total (specificity + sensitivity): "+str(stats['total']))
+        print()
+        print("ROC: "+str(stats['ROC']))
+        print("F1: "+str(stats['F1']))
+        print("MCC: "+str(stats['MCC']))
 
 
 

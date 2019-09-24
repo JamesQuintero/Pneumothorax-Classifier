@@ -1,10 +1,12 @@
 Ideas: 
 
+Augment images by rotating, shearing, mirror, etc. 
+
 *) Multiple images thresholded to different levels, so that if the line of pneumothorax is dimmer than the ribs, it can still be count if the threshold is high enough. Because each case is different. 
 
-Make areas outside of lungs black, then make it so the part of the lung with pneumothorax is bright white. 
+Done - Make areas outside of lungs black, then make it so the part of the lung with pneumothorax is bright white. 
 
 
-Portion the training data to include 50% pneumothorax and 50% non-pneumothorax. 
+Done - Portion the training data to include 50% pneumothorax and 50% non-pneumothorax. 
 
 Use a residual net like resnet50 or some other u-net instead of old CNN. 
