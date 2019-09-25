@@ -48,10 +48,14 @@ class Classifier(ABC):
     data_handler = None
     image_preprocessor = None
 
+    hyperparameters = {}
+
     def __init__(self):
         self.dicom_reader = DICOMReader()
         self.data_handler = DataHandler()
         self.image_preprocessor = ChestRadiograph()
+
+        self.hyperparameters = self.data_handler.load_hyperparameters()
 
     #returns proper filename prefix for specified model_arch, e.x: "cnn" returns "cnn" for use in "./cnn_model.h5"
     def get_model_arch_filename_prefix(self, model_arch):
@@ -109,32 +113,6 @@ class Classifier(ABC):
                 positive = positive[:len(negative)]
             elif len(positive)<len(negative):
                 negative = negative[:len(positive)]
-
-
-            # #adds each side randomly 
-            # print("Shuffling inputs")
-            # x = 0
-            # y = 0
-            # random.seed(12345)
-            # while x<len(positive) and y<len(negative):
-            #     #choose positive or negative randomly
-            #     rand_num = random.random()
-            #     if rand_num<0.5:
-            #         new_image_paths.append(positive[x])
-            #         x+=1
-            #     else:
-            #         new_image_paths.append(negative[y])
-            #         y+=1
-
-            # #if not all the positive symbols were able to be added, add the rest
-            # if x<len(positive):
-            #     new_image_paths.extend(positive[x:])
-            # elif y<len(negative):
-            #     new_image_paths.extend(negative[y:])
-
-            # image_paths = new_image_paths
-
-
 
             #shuffles positives and negatives
             image_paths = []
@@ -522,16 +500,16 @@ class Classifier(ABC):
 
 
     #trains CNN
-    def train(self, model_arch="cnn", dataset_size=100):
+    @abstractmethod
+    def train(self, model_arch="cnn", dataset_size=100, train_ratio=0.7, val_ratio=0.2, batch_size=1, epochs=1):
 
         max_images = dataset_size
         X = self.get_processed_image_paths(balanced=True, max_num=max_images)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
 
-        train_ratio = 0.7
-        validation_ratio = 0.2
-        X_train, X_validate, X_test = self.data_handler.split_data(X, train_ratio, validation_ratio)
+        #splits into training, validation, and test datasets
+        X_train, X_validate, X_test = self.data_handler.split_data(X, train_ratio, val_ratio)
 
         print("X_train size: "+str(len(X_train)))
         print("X_validate size: "+str(len(X_validate)))
@@ -545,12 +523,6 @@ class Classifier(ABC):
             print("Unsupported specified model type")
             return
 
-        # params = self.get_data_generator_params("train")
-
-        batch_size = 10
-        epochs = 10
-
-        # training_generator = DataGenerator(X_train, Y, batch_size, **params)
 
         training_generator = self.create_data_generator(X_train, Y, batch_size, "train")
 
@@ -578,7 +550,7 @@ class Classifier(ABC):
 
 
         #perform prediction on validation portion
-        # self.predict(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=10)
+        self.predict(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=10)
 
 
         classifier.save("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
@@ -604,7 +576,7 @@ class Classifier(ABC):
 
 
 
-        self.predict(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=10)
+        self.predict(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=5)
 
 
 
@@ -625,22 +597,25 @@ class BinaryClassifier(Classifier):
 
     #creates CNN sculpted for binary classification
     def create_CNN(self):
+        CNN_size = self.hyperparameters['binary']['cnn']['conv_layer_size']
+        pool_size = (self.hyperparameters['binary']['cnn']['pool_size'], self.hyperparameters['binary']['cnn']['pool_size'])
+        filter_size = (self.hyperparameters['binary']['cnn']['filter_size'], self.hyperparameters['binary']['cnn']['filter_size'])
+        CNN_activation = self.hyperparameters['binary']['cnn']['conv_activation']
+        dense_activation = self.hyperparameters['binary']['cnn']['dense_activation']
+        output_activation = self.hyperparameters['binary']['cnn']['output_activation']
+        loss = self.hyperparameters['binary']['cnn']['loss']
+        optimizer = self.hyperparameters['binary']['cnn']['optimizer']
+        last_layer_size = self.hyperparameters['binary']['cnn']['last_layer_size']
+        dropout = self.hyperparameters['binary']['cnn']['dropout']
+
+        if loss=="dice_coef_loss":
+            loss = self.dice_coef_loss
+
+
+
         # Initialising the CNN
         classifier = Sequential()
-
-        CNN_size = 32
-        pool_size = (3,3)
-        filter_size = (3,3)
-        CNN_activation = "selu"
-        dense_activation = "selu"
-        output_activation = "sigmoid"
-        # loss = "binary_crossentropy"
-        loss = "mean_squared_error"
-        optimizer = "adam"
-        last_layer_size = 128
-        dropout = 0.25
-
-        classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
+        classifier.add(Conv2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
 
         # Step 2 - Pooling
         #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
@@ -650,36 +625,36 @@ class BinaryClassifier(Classifier):
         classifier.add(Dropout(dropout))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+        classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(dropout))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+        classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(dropout))
 
         # Adding a second convolutional layer
-        classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+        classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(dropout))
 
         # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+        # classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         # classifier.add(MaxPooling2D(pool_size = pool_size))
         # # classifier.add(BatchNormalization(axis=3))
         # classifier.add(Dropout(0.25))
 
         # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
+        # classifier.add(Conv2D(CNN_size, filter_size, activation = CNN_activation))
         # classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(Dropout(0.25))
 
         # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
+        # classifier.add(Conv2D(CNN_size, filter_size, activation = CNN_activation))
         # classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(Dropout(0.25))
 
@@ -702,13 +677,21 @@ class BinaryClassifier(Classifier):
 
     #creates and returns U-net architecture model
     def create_Unet(self):
-        start_size = 16
-        pool_size = (2,2)
-        filter_size = (3,3)
-        conv_activation = "selu"
-        dense_activation = "selu"
-        output_activation = "sigmoid"
-        loss = "mean_squared_error"
+        start_size = self.hyperparameters['binary']['unet']['start_size']
+        pool_size = (self.hyperparameters['binary']['unet']['pool_size'],self.hyperparameters['binary']['unet']['pool_size'])
+        filter_size = (self.hyperparameters['binary']['unet']['filter_size'],self.hyperparameters['binary']['unet']['filter_size'])
+        conv_activation = self.hyperparameters['binary']['unet']['conv_activation']
+        dense_activation = self.hyperparameters['binary']['unet']['dense_activation']
+        output_activation = self.hyperparameters['binary']['unet']['output_activation']
+        loss = self.hyperparameters['binary']['unet']['loss']
+        optimizer = self.hyperparameters['binary']['unet']['optimizer']
+        last_layer_size = self.hyperparameters['binary']['unet']['last_layer_size']
+
+        if loss=="dice_coef_loss":
+            loss = self.dice_coef_loss
+
+        if optimizer=="adam":
+            optimizer = Adam(lr=1e-5)
 
         # inputs = Input((self.image_width, self.image_height, 1))
         # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
@@ -853,15 +836,16 @@ class BinaryClassifier(Classifier):
 
 
         dense1 = Flatten()(conv10)
+        dense1 = Dense(units = last_layer_size, activation = dense_activation)(dense1)
 
         dense2 = Dense(units = 1, activation = output_activation)(dense1)
-        # # # # classifier.add(Dropout(0.25))
+        classifier.add(Dropout(0.25))
 
         
         model = Model(inputs=inputs, outputs=dense2)
 
         # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
-        model.compile(optimizer=Adam(lr=1e-5), loss=loss, metrics=["accuracy"])
+        model.compile(optimizer=optimizer, loss=loss, metrics=["accuracy"])
 
         model.summary()
 
@@ -879,16 +863,25 @@ class BinaryClassifier(Classifier):
 
         prediction_data = np.array(prediction_data)
 
-        print("Target data: "+str(target_data.shape))
-        print("Prediction data: "+str(prediction_data.shape))
+        # print("Target data: "+str(target_data.shape))
+        # print("Prediction data: "+str(prediction_data.shape))
 
         #calculates confusion matrix
         conf_matrix = confusion_matrix(target_data, prediction_data)
-        print("Confusion matrix: ")
-        print(conf_matrix)
+        # print("Confusion matrix: ")
+        # print(conf_matrix)
 
         return [conf_matrix]
 
+    #trains binary classifier with specified hyperparameters
+    def train(self, model_arch="cnn", dataset_size=100):
+
+        train_ratio = self.hyperparameters['binary'][model_arch]['train_ratio']
+        validation_ratio = self.hyperparameters['binary'][model_arch]['val_ratio']
+        batch_size = self.hyperparameters['binary'][model_arch]['batch_size']
+        epochs = self.hyperparameters['binary'][model_arch]['epochs']
+
+        super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
 
 
 
@@ -900,22 +893,31 @@ Handles segmentation classification training, validation, and testing
 class SegmentationClassifier(Classifier):
     def __init__(self):
         super().__init__()
-        pass
 
     #creates CNN sculpted for segmentation classification
     def create_CNN(self):
+
+        CNN_size = self.hyperparameters['segmentation']['cnn']['conv_layer_size']
+        pool_size = (self.hyperparameters['segmentation']['cnn']['pool_size'],self.hyperparameters['segmentation']['cnn']['pool_size'])
+        filter_size = (self.hyperparameters['segmentation']['cnn']['filter_size'],self.hyperparameters['segmentation']['cnn']['filter_size'])
+        conv_activation = self.hyperparameters['segmentation']['cnn']['conv_activation']
+        dense_activation = self.hyperparameters['segmentation']['cnn']['dense_activation']
+        output_activation = self.hyperparameters['segmentation']['cnn']['output_activation']
+        dropout = self.hyperparameters['segmentation']['cnn']['dropout']
+        loss = self.hyperparameters['segmentation']['cnn']['loss']
+        optimizer = self.hyperparameters['segmentation']['cnn']['optimizer']
+
+        if loss=="dice_coef_loss":
+            loss = self.dice_coef_loss
+
+        if optimizer=="adam":
+            optimizer = Adam(lr=1e-5)
+
+
+
+
         # Initialising the CNN
         classifier = Sequential()
-
-        CNN_size = 32
-        pool_size = (3,3)
-        filter_size = (3,3)
-        conv_activation = "selu"
-        dense_activation = "selu"
-        output_activation = "sigmoid"
-        # loss = "binary_crossentropy"
-        loss = "mean_squared_error"
-        optimizer = "adam"
 
         # classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
 
@@ -972,19 +974,19 @@ class SegmentationClassifier(Classifier):
         inputs = Input((self.image_width, self.image_height, 1))
         conv1 = Conv2D(CNN_size , filter_size, activation=conv_activation, padding='same')(inputs)
         pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
-        dropout1 = Dropout(0.25)(pool1)
+        dropout1 = Dropout(dropout)(pool1)
 
         conv2 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout1)
         pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
-        dropout2 = Dropout(0.25)(pool2)
+        dropout2 = Dropout(dropout)(pool2)
 
         conv3 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout2)
         pool3 = MaxPooling2D(pool_size=pool_size)(conv3)
-        dropout3 = Dropout(0.25)(pool3)
+        dropout3 = Dropout(dropout)(pool3)
 
         conv4 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout3)
         pool4 = MaxPooling2D(pool_size=pool_size)(conv4)
-        dropout4 = Dropout(0.25)(pool4)
+        dropout4 = Dropout(dropout)(pool4)
 
         conv10 = Conv2D(1, (1, 1), activation=output_activation)(dropout4)
         # conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
@@ -992,7 +994,7 @@ class SegmentationClassifier(Classifier):
 
         model = Model(inputs=inputs, outputs=conv10)
 
-        model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
+        model.compile(optimizer=optimizer, loss=loss, metrics=[self.dice_coef])
 
         model.summary()
 
@@ -1001,11 +1003,21 @@ class SegmentationClassifier(Classifier):
 
     #creates and returns U-net architecture model specific for segmentation prediction
     def create_Unet(self):
-        start_size = 16
-        pool_size = (2,2)
-        filter_size = (3,3)
-        conv_activation = "selu"
-        output_activation = "sigmoid"
+        start_size = self.hyperparameters['segmentation']['unet']['start_size']
+        pool_size = (self.hyperparameters['segmentation']['unet']['pool_size'],self.hyperparameters['segmentation']['unet']['pool_size'])
+        filter_size = (self.hyperparameters['segmentation']['unet']['filter_size'],self.hyperparameters['segmentation']['unet']['filter_size'])
+        conv_activation = self.hyperparameters['segmentation']['unet']['conv_activation']
+        output_activation = self.hyperparameters['segmentation']['unet']['output_activation']
+        loss = self.hyperparameters['segmentation']['unet']['loss']
+        optimizer = self.hyperparameters['segmentation']['unet']['optimizer']
+        last_layer_size = self.hyperparameters['segmentation']['unet']['last_layer_size']
+
+
+        if loss=="dice_coef_loss":
+            loss = self.dice_coef_loss
+
+        if optimizer=="adam":
+            optimizer = Adam(lr=1e-5)
 
 
         # inputs = Input((self.image_width, self.image_height, 1))
@@ -1144,13 +1156,13 @@ class SegmentationClassifier(Classifier):
         conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
         # conv9 = BatchNormalization()(conv9)
 
-        conv10 = Conv2D(1, (1, 1), activation=output_activation)(conv9)
+        conv10 = Conv2D(last_layer_size, (1, 1), activation=output_activation)(conv9)
         # conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
 
 
         model = Model(inputs=inputs, outputs=conv10)
 
-        model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
+        model.compile(optimizer=optimizer, loss=loss, metrics=[self.dice_coef])
 
         model.summary()
 
@@ -1188,6 +1200,16 @@ class SegmentationClassifier(Classifier):
 
         return confusion_matrices
 
+    #trains segmentation with specified hyperparameters
+    def train(self, model_arch="unet", dataset_size=100):
+
+        train_ratio = self.hyperparameters['segmentation'][model_arch]['train_ratio']
+        validation_ratio = self.hyperparameters['segmentation'][model_arch]['val_ratio']
+        batch_size = self.hyperparameters['segmentation'][model_arch]['batch_size']
+        epochs = self.hyperparameters['segmentation'][model_arch]['epochs']
+
+        super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
+
 
 
 
@@ -1214,5 +1236,5 @@ if __name__=="__main__":
 
     # CNN_classifier.train(dataset_size=200)
 
-    # classifier.test(model_arch="cnn", dataset_size=10)
-    classifier.test(model_arch="unet", dataset_size=10)
+    classifier.train(model_arch="unet", dataset_size=100)
+    # classifier.test(model_arch="unet", dataset_size=10)

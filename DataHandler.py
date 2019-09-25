@@ -92,7 +92,7 @@ class DataHandler:
         # hyper_parameters['binary']['unet']['output_activation'] = "sigmoid"
         # hyper_parameters['binary']['unet']['loss'] = "mean_squared_error"
         # hyper_parameters['binary']['unet']['optimizer'] = "adam"
-        # hyper_parameters['binary']['unet']['last_layer_size'] = 1
+        # hyper_parameters['binary']['unet']['last_layer_size'] = 128
         # hyper_parameters['binary']['unet']['dropout'] = 0
 
 
