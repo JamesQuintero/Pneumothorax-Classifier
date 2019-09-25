@@ -143,7 +143,7 @@ class DICOMReader:
 
             print()
 
-        #displays everything
+
         plt.show()
 
 
@@ -245,22 +245,12 @@ class DICOMReader:
         for x in range(0, len(from_paths)):
             print("From path: "+str(from_paths[x]))
 
-            # #gets imageid from file path
-            # image_id = self.extract_image_id(from_paths[x])
-            # print("Image id: "+str(image_id))
-
-        
-            
-
             try:
                 #uses copy2 instead of copy so that metadata is also copied
                 shutil.copy2(from_paths[x], to_path)
             except Exception as error:
                 pass
 
-            
-
-            # return
 
     def extract_image_id(self, path, ext="dcm"):
         #extracts image_id from the file path

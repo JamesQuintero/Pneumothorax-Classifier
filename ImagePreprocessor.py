@@ -17,12 +17,15 @@ import cv2 #py -3 -m pip install opencv-python
 import matplotlib.pyplot as plt #for displaying DICOM files
 from PIL import Image
 
+#for abstraction
+from abc import ABC, abstractmethod
+
 """
 
-Handles image preprocessing, validation, and testing
+Abstract class for handling image preprocessing
 
 """
-class ImagePreprocessor:
+class ImagePreprocessor(ABC):
 
     image_width = 1024
     image_height = 1024
@@ -50,40 +53,18 @@ class ImagePreprocessor:
             scaler = MinMaxScaler(feature_range=(0,1))
 
 
-        # print()
-        # print(train)
-        # print()
-        # print(train[0])
-        # print()
-        # print(train[0][0])
-        # print()
-        # print(train[0][0][0])
-        # print()
-        # print(train[0][0][0][0])
-
-        # print(train.shape)
-
-
-        #https://stackoverflow.com/questions/50125844/how-to-standard-scale-a-3d-matrix
-
-        # #fits scalar to training data
-        # for x in range(0, len(train)):
-        #     fit_concat_training = scaler.fit(train[x])
-
-
-
         # train_normalized = train/255
         # validate_normalized = validate/255
         # test_normalized = test/255
+
+
 
         mean = np.mean(train)
         std = np.std(train)
 
         # Subtract it equally from all splits
         train_normalized = (train - mean) / std
-
         validate_normalized = (validate - mean)/std
-
         test_normalized = (test - mean)/std
 
 
@@ -119,8 +100,6 @@ class ImagePreprocessor:
         g =  np.exp(-((x**2 + y**2) / (2.0*sigma**2))) * normal
         return g
 
-
-
     #Gradient detection (blackening)
     def sobel_filters(self, image):
         Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], np.float32)
@@ -133,7 +112,6 @@ class ImagePreprocessor:
         G = G / G.max() * 255
         theta = np.arctan2(Iy, Ix)
         return (G, theta)
-
 
     #thins out edges
     def non_max_suppression(self, gradient_matrix, theta_matrix):
@@ -228,55 +206,30 @@ class ImagePreprocessor:
 
     #each image is a 2D array of 8-bit values, so account for overflow
     def subtract_images(self, image1, image2):
-        # result = np.zeros((image1.shape[0], image1.shape[1]), dtype=np.uint8)
-
-        # for x in range(image1.shape[0]):
-        #     for y in range(image1.shape[1]):
-        #         #have to handle overflow
-        #         if image1[x][y]>image2[x][y]:
-        #             result[x][y] = image1[x][y] - image2[x][y]
-        #         else:
-        #             result[x][y] = 0
-
-        # return result
-
         return cv2.subtract(image1, image2)
 
 
     #applies canny edge detector to the image as the preprocessing step
     #source: https://github.com/FienSoP/canny_edge_detector
+    @abstractmethod
     def canny_edge_detector(self, image, kernel_size=5, sigma=1, strong_pixel=255, weak_pixel=75, high_threshold=0.15, low_threshold=0.05):
+        #blurs image
+        image_smoothed = self.apply_gaussian_blur(image, kernel_size, sigma)
 
+        #blackens majority of image and whitens edges
+        gradient_matrix, theta_matrix = self.sobel_filters(image_smoothed)
 
-        # #blurs image
-        # image_smoothed = self.apply_gaussian_blur(image, kernel_size, sigma)
-
-        # #blackens majority of image and whitens edges
-        # gradient_matrix, theta_matrix = self.sobel_filters(image_smoothed)
-
-        # #reduces white edges
-        # non_max_image = self.non_max_suppression(gradient_matrix, theta_matrix)
-
-        # #only considers important edges
-        # threshold_image = self.threshold(non_max_image, strong_pixel, weak_pixel, high_threshold, low_threshold)
-
-        # #edge tracking
-        # edge_tracking = self.hysteresis(threshold_image, strong_pixel, weak_pixel)
-
+        #reduces white edges
+        non_max_image = self.non_max_suppression(gradient_matrix, theta_matrix)
 
         #only considers important edges
-        # threshold_image = self.threshold(image_smoothed, strong_pixel, weak_pixel, high_threshold, low_threshold)
+        threshold_image = self.threshold(non_max_image, strong_pixel, weak_pixel, high_threshold, low_threshold)
+
+        #edge tracking
+        edge_tracking = self.hysteresis(threshold_image, strong_pixel, weak_pixel)
 
 
-
-
-        ret, threshold_image = cv2.threshold(image, weak_pixel, strong_pixel, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-
-        # # #edge tracking
-        # edge_tracking = self.hysteresis(image, strong_pixel, weak_pixel)
-
-        threshold_image = self.subtract_images(image, threshold_image)
+        threshold_image = self.subtract_images(image, edge_tracking)
 
         return threshold_image
 
@@ -291,32 +244,27 @@ class ImagePreprocessor:
             return image
 
     #perfdorms filtering on the 2D image
+    @abstractmethod
     def edge_filter(self, image):
 
         #blurs image for noise reduction
         blurred = self.reduce_noise(image)
         # blurred = image
 
-        strong_pixel = 255 #255 default
-        weak_pixel = 99 #127 default
-        ret,threshold0 = cv2.threshold(blurred,weak_pixel,strong_pixel,cv2.THRESH_BINARY)
-
-
-        # #gets rid of the distinct white portions
-        # threshold1 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 21,2)
-        # threshold1 = self.reduce_noise(threshold1)
-        # #gets rid of smaller white portions
-        # threshold2 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 11,2)
-        # threshold2 = self.reduce_noise(threshold2)
-        # #gets rid of thinner white portions
-        # threshold3 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 3,2)
-        # threshold3 = self.reduce_noise(threshold3)
+        #gets rid of the distinct white portions
+        threshold1 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 21,2)
+        threshold1 = self.reduce_noise(threshold1)
+        #gets rid of smaller white portions
+        threshold2 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 11,2)
+        threshold2 = self.reduce_noise(threshold2)
+        #gets rid of thinner white portions
+        threshold3 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 3,2)
+        threshold3 = self.reduce_noise(threshold3)
 
         result = image
-        result = self.subtract_images(image, threshold0)
-        # result = self.subtract_images(result, threshold1)
-        # result = self.subtract_images(result, threshold2)
-        # result = self.subtract_images(result, threshold3)
+        result = self.subtract_images(result, threshold1)
+        result = self.subtract_images(result, threshold2)
+        result = self.subtract_images(result, threshold3)
 
         return result
 
@@ -360,6 +308,162 @@ class ImagePreprocessor:
         # by removing the background from the local_extreme mask
         detected_minima = local_extreme - eroded_background
         return np.where(detected_minima)
+
+
+    #crops to focus on just the important parts of the radiograph
+    @abstractmethod
+    def crop(self, pixels):
+        return pixels
+
+
+    #performs bulk preprocessing on training images
+    def bulk_preprocessing(self, dataset_type="train", replace=True):
+
+        if dataset_type.lower() == "train":
+            dicom_paths = self.dicom_reader.load_dicom_train_paths()
+        elif dataset_type.lower() == "test":
+            dicom_paths = self.dicom_reader.load_dicom_test_paths()
+        else:
+            dicom_paths = []
+
+
+        # for i, image_path in enumerate(train_dicom_paths):
+        for i in range(0, len(dicom_paths)):
+            image_path = dicom_paths[i]
+
+            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
+
+            #extracts image_id from the file path
+            image_id = image_path.split('\\')[-1].replace(".dcm", "")
+            print("Image id: "+str(image_id))
+
+
+            if dataset_type.lower() == "train":
+                new_path = self.dicom_reader.get_dicom_filtered_train_path()
+            elif dataset_type.lower() == "test":
+                new_path = self.dicom_reader.get_dicom_filtered_test_path()
+
+            new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
+
+            #if shouldn't replace file, and if file exists, then skip preprocessing
+            if replace==False and os.path.isfile(new_path):
+                continue
+
+            # #skip non-pneumothorax
+            # masks = self.data_handler.find_masks(image_id)
+            # if len(masks)==0:
+            #     continue
+
+
+
+            pixels = dicom_image.pixel_array
+
+            pixels = self.preprocess(pixels)
+
+            self.dicom_reader.plot_pixel_array(pixels)
+
+
+
+
+
+            # kernel_size = 5
+            # sigma = 2
+            # strong_pixel = 255
+            # weak_pixel = 75
+            # high_threshold = 0.15
+            # low_threshold = 0.05
+
+            # # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
+            # new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
+
+
+
+
+            #if the pixel data is reduced (e.g. a 512 x 512 image is collapsed to 256 x 256) then ds.Rows and ds.Columns should be set appropriately. 
+            #https://github.com/pydicom/pydicom/issues/738
+            # dicom_image.PixelData = dicom_image.pixel_array.tobytes()
+
+
+
+
+
+
+
+            im = Image.fromarray(pixels)
+            im.save(new_path)
+
+            print("Preprocessed image "+str(i)+"/"+str(len(dicom_paths)))
+
+
+    #Preprocesses a single image
+    @abstractmethod
+    def preprocess(self, pixels):
+        return pixels
+
+
+
+
+
+"""
+
+ImagePreprocessor class for Chest X-rays
+
+"""
+class ChestRadiograph(ImagePreprocessor):
+
+
+    def __init__(self):
+        super().__init__()
+        pass
+
+    def print_something(self):
+        print("Something")
+
+        result = self.normalize_data(255)
+        print(result)
+
+        result = self.crop(5)
+        print(result)
+
+
+    #applies canny edge detector to the image as the preprocessing step
+    def canny_edge_detector(self, image, kernel_size=5, sigma=1, strong_pixel=255, weak_pixel=75, high_threshold=0.15, low_threshold=0.05):
+        
+        ret, threshold_image = cv2.threshold(image, weak_pixel, strong_pixel, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        threshold_image = self.subtract_images(image, threshold_image)
+
+        return threshold_image
+
+        # return non_max_image
+
+    def edge_filter(self, image):
+        #blurs image for noise reduction
+        blurred = self.reduce_noise(image)
+        # blurred = image
+
+        strong_pixel = 255 #255 default
+        weak_pixel = 99 #127 default
+        ret,threshold0 = cv2.threshold(blurred,weak_pixel,strong_pixel,cv2.THRESH_BINARY)
+
+
+        # #gets rid of the distinct white portions
+        # threshold1 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 21,2)
+        # threshold1 = self.reduce_noise(threshold1)
+        # #gets rid of smaller white portions
+        # threshold2 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 11,2)
+        # threshold2 = self.reduce_noise(threshold2)
+        # #gets rid of thinner white portions
+        # threshold3 = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_MEAN_C , cv2.THRESH_BINARY_INV, 3,2)
+        # threshold3 = self.reduce_noise(threshold3)
+
+        result = image
+        result = self.subtract_images(image, threshold0)
+        # result = self.subtract_images(result, threshold1)
+        # result = self.subtract_images(result, threshold2)
+        # result = self.subtract_images(result, threshold3)
+
+        return result
 
 
     #crops to focus on just the ribcage/lungs
@@ -456,7 +560,6 @@ class ImagePreprocessor:
         print("Right ribs: "+str(right_ribs))
 
         return left_ribs, right_ribs
-
 
     #returns 2 index values denoting edge of rib cage on left and right sides
     def crop_row_indices(self, pixels):
@@ -560,285 +663,80 @@ class ImagePreprocessor:
         return top_ribs, bottom_ribs
 
 
-    # #normalizes pixel intensity so that the brighest pixel is 255, and blackest pixel is 0
-    # def renormalize(self, pixels):
-    #     cur_max_intensity = np.amax(pixels)
-    #     cur_min_intensity = np.amin(pixels)
-    #     print("Max intensity: "+str(cur_max_intensity))
-    #     print("Min intensity: "+str(cur_min_intensity))
+    def preprocess(self, pixels):
+        #crops
+        pixels = self.crop(pixels)
 
-    #     max_intensity = 255
-    #     min_intensity = 0
+        #normalizes cropped image so that the blackest pixel is once again 255, 
+        #and whitest is once again 0, which the rest ajusting accordingly
+        # https://docs.opencv.org/3.4/d3/dc1/tutorial_basic_linear_transform.html
+        # pixels = self.renormalize(pixels)
 
-    #     max_ratio = 1+(abs(max_intensity-cur_max_intensity)/max_intensity)
-    #     min_ratio = 1-(abs(min_intensity-cur_min_intensity)/max_intensity)
+        # self.dicom_reader.plot_pixel_array(pixels)
 
+        # ## Perform preprocessing ##
+        # pixels = np.invert(pixels)
 
+        #resizes to 512x512
+        pixels = cv2.resize(pixels, (512, 512))
 
-    #     print("Max ratio: "+str(max_ratio))
-    #     print("Min ratio: "+str(min_ratio))
-    #     input()
 
-    #gets a mean of all the training images
-    #this should allow for average lung boundaries to be apparent, and then we can crop based off that
-    def mean_images(self, num_images=50):
-        train_dicom_paths = self.dicom_reader.load_dicom_train_paths()
+        intensity_mean = np.mean(pixels)
+        intensity_median = np.median(pixels)
 
-        train_dicom_paths = train_dicom_paths[:num_images]
+        print("Mean: "+str(intensity_mean))
+        print("Median: "+str(intensity_median))
 
-        num_added = 0
 
-        # crop_start = 100
-        # crop_end = 900
 
-        # resize_width = 512
-        # resize_height = 512
 
-        #32-bits so that there's no overflow
-        total_pixels = np.zeros((self.image_height, self.image_width), dtype=np.uint32)
-        for i, image_path in enumerate(train_dicom_paths):
+        # self.dicom_reader.plot_pixel_array(pixels)
+        # pixels = self.edge_filter(pixels)
 
-            # if i<=16:
-            #     continue
+        strong_pixel = 255
+        edged_image = self.canny_edge_detector(image=pixels, weak_pixel=75, strong_pixel=strong_pixel)
 
-            # #extracts image_id from the file path
-            # image_id = image_path.split('\\')[-1].replace(".dcm", "")
-            image_id = self.dicom_reader.extract_image_id(image_path)
-
-
-            # print("Image id: "+str(image_id))
-
-            # masks = self.data_handler.find_masks(image_id)
-            # if len(masks)==0:
-            #     continue
-
-            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
-
-            # new_path = self.dicom_reader.get_dicom_filtered_train_path()
-            # new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
-
-            # #if shouldn't replace file, and if file exists, then skip preprocessing
-            # if replace==False and os.path.isfile(new_path):
-            #     continue
-
-            pixels = dicom_image.pixel_array
-
-            self.dicom_reader.plot_pixel_array(pixels)
-
-            # pixels = pixels[crop_start:crop_end, crop_start:crop_end]
-            # pixels = cv2.resize(pixels, (resize_height, resize_width))
-
-            pixels = self.crop(pixels)
-
-            # #resizes to original size
-            # pixels = cv2.resize(pixels, (self.image_height, self.image_width))
-
-            # self.dicom_reader.plot_pixel_array(pixels)
-
-
-            # #if first image of mean, start with it
-            # total_pixels += pixels
-            # num_added += 1
-
-
-
-
-
-
-
-            ## Perform preprocessing ##
-            # pixels = np.invert(pixels)
-
-            #resizes to 512x512
-            # pixels = cv2.resize(pixels, (512, 512))
-
-            # pixels = self.edge_filter(pixels)
-
-
-            # self.dicom_reader.plot_pixel_array(pixels)
-
-
-            # im = Image.fromarray(pixels)
-            # im.save(new_path)
-
-                # self.dicom_reader.save_dicom_obj(new_path, dicom_image)
-
-            print("Preprocessed image "+str(i)+"/"+str(len(train_dicom_paths)))
-
-
-        mean_pixels = (total_pixels/num_added)
-        #converts to 0-255 for plotting
-        mean_pixels = mean_pixels.astype(np.uint8)
-
-        # mean_pixels = np.invert(mean_pixels)
-
-        self.dicom_reader.plot_pixel_array(mean_pixels)
-
-
-    #performs bulk preprocessing on training images
-    def bulk_preprocessing(self, dataset_type="train", replace=True):
-
-        if dataset_type.lower() == "train":
-            dicom_paths = self.dicom_reader.load_dicom_train_paths()
-        elif dataset_type.lower() == "test":
-            dicom_paths = self.dicom_reader.load_dicom_test_paths()
-
-        # print("Num dicom paths: "+str(len(dicom_paths)))
-
-
-        # for i, image_path in enumerate(train_dicom_paths):
-        for i in range(0, len(dicom_paths)):
-            image_path = dicom_paths[i]
-
-            print("Image path: "+str(image_path))
-            dicom_image = self.dicom_reader.get_dicom_obj(image_path)
-
-            #extracts image_id from the file path
-            image_id = image_path.split('\\')[-1].replace(".dcm", "")
-            print("Image id: "+str(image_id))
-
-
-            if dataset_type.lower() == "train":
-                new_path = self.dicom_reader.get_dicom_filtered_train_path()
-            elif dataset_type.lower() == "test":
-                new_path = self.dicom_reader.get_dicom_filtered_test_path()
-
-            new_path += "/"+str(image_id)+"."+str(self.preprocessed_ext)
-
-            print("New path: "+str(new_path))
-
-            #if shouldn't replace file, and if file exists, then skip preprocessing
-            if replace==False and os.path.isfile(new_path):
-                continue
-
-            # #skip non-pneumothorax
-            # masks = self.data_handler.find_masks(image_id)
-            # if len(masks)==0:
-            #     continue
-
-
-
-            pixels = dicom_image.pixel_array
-
-            # self.dicom_reader.plot_pixel_array(pixels)
-
-            #crops
-            pixels = self.crop(pixels)
-
-            #normalizes cropped image so that the blackest pixel is once again 255, 
-            #and whitest is once again 0, which the rest ajusting accordingly
-            # https://docs.opencv.org/3.4/d3/dc1/tutorial_basic_linear_transform.html
-            # pixels = self.renormalize(pixels)
-
-            # self.dicom_reader.plot_pixel_array(pixels)
-
-            # ## Perform preprocessing ##
-            # pixels = np.invert(pixels)
-
-            #shrinks width and height by half, thereby shrining entire image by 4x
-            # pixels = cv2.resize(pixels, (0,0), fx=0.5, fy=0.5) 
-
-            # #crops to only show 100-800 and 100-800 pixels
-            # pixels = pixels[100:800, 100:800]
-
-
-            #resizes to 512x512
-            pixels = cv2.resize(pixels, (512, 512))
-
-
-            intensity_mean = np.mean(pixels)
-            intensity_median = np.median(pixels)
-
-            print("Mean: "+str(intensity_mean))
-            print("Median: "+str(intensity_median))
-
-
-
-
-            # self.dicom_reader.plot_pixel_array(pixels)
-            # pixels = self.edge_filter(pixels)
-
-            strong_pixel = 255
+        #while the mean pixel intensity is too low, then lower the strength of the edge detector to include more pixels
+        while np.mean(edged_image)<30 and strong_pixel>0:
+            strong_pixel = max(0, strong_pixel-50)
             edged_image = self.canny_edge_detector(image=pixels, weak_pixel=75, strong_pixel=strong_pixel)
 
-            #while the mean pixel intensity is too low, then lower the strength of the edge detector to include more pixels
-            while np.mean(edged_image)<30 and strong_pixel>0:
-                strong_pixel = max(0, strong_pixel-50)
-                edged_image = self.canny_edge_detector(image=pixels, weak_pixel=75, strong_pixel=strong_pixel)
+
+        pixels = edged_image
+
+        new_intensity_mean = np.mean(pixels)
+        new_intensity_median = np.median(pixels)
+
+        print("Edged Mean: "+str(new_intensity_mean))
+        print("Edged Median: "+str(new_intensity_median))
 
 
-            pixels = edged_image
-
-            new_intensity_mean = np.mean(pixels)
-            new_intensity_median = np.median(pixels)
-
-            print("Edged Mean: "+str(new_intensity_mean))
-            print("Edged Median: "+str(new_intensity_median))
+        #brighten image if its mean intensity is too low
+        if intensity_mean<150:
+            alpha = 2.0 # Simple contrast control default = 1.0
+            beta = 0    # Simple brightness control default = 0.0
 
 
-            #brighten image if its mean intensity is too low
-            if intensity_mean<150:
-                alpha = 2.0 # Simple contrast control default = 1.0
-                beta = 0    # Simple brightness control default = 0.0
+            pixels = cv2.convertScaleAbs(pixels, alpha=alpha, beta=beta)
+            # for y in range(pixels.shape[0]):
+            #     for x in range(pixels.shape[1]):
+            #             pixels[y,x] = np.clip(alpha*pixels[y,x] + beta, 0, 255)
+
+        # pixels = np.invert(pixels)
+
+        # cv2.imshow('Original Image', pixels)
+        # cv2.imshow('New Image', new_image)
+
+        return pixels
 
 
-                pixels = cv2.convertScaleAbs(pixels, alpha=alpha, beta=beta)
-                # for y in range(pixels.shape[0]):
-                #     for x in range(pixels.shape[1]):
-                #             pixels[y,x] = np.clip(alpha*pixels[y,x] + beta, 0, 255)
-
-
-
-            
-
-
-            # pixels = np.invert(pixels)
-
-            # cv2.imshow('Original Image', pixels)
-            # cv2.imshow('New Image', new_image)
-
-
-            # self.dicom_reader.plot_pixel_array(pixels)
-
-
-
-
-
-            # kernel_size = 5
-            # sigma = 2
-            # strong_pixel = 255
-            # weak_pixel = 75
-            # high_threshold = 0.15
-            # low_threshold = 0.05
-
-            # # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
-            # new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
-
-
-
-
-            #if the pixel data is reduced (e.g. a 512 x 512 image is collapsed to 256 x 256) then ds.Rows and ds.Columns should be set appropriately. 
-            #https://github.com/pydicom/pydicom/issues/738
-            # dicom_image.PixelData = dicom_image.pixel_array.tobytes()
-
-
-
-
-
-
-
-            im = Image.fromarray(pixels)
-            im.save(new_path)
-
-            print("Preprocessed image "+str(i)+"/"+str(len(dicom_paths)))
 
 
 
 
 
 if __name__=="__main__":
-    image_preprocessor = ImagePreprocessor()
-    
-    # image_preprocessor.normalize_data()
-    image_preprocessor.bulk_preprocessing(dataset_type="test", replace=False)
-    # image_preprocessor.mean_images(100)
+
+    chest_xray = ChestRadiograph()
+
+    chest_xray.bulk_preprocessing("train", True)

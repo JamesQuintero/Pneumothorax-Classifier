@@ -1,5 +1,6 @@
 from DataHandler import DataHandler
-from ImagePreprocessor import ImagePreprocessor
+from ImagePreprocessor import *
+from mask_functions import rle2mask
 
 import sys
 import keras
@@ -22,19 +23,20 @@ class DataGenerator(keras.utils.Sequence):
 
     #passes in max number of images
     #batch size is the number of items per batch
-    def __init__(self, image_paths, labels, batch_size, dim=(1024, 1024, 1), augment=False, shuffle=False):
+    def __init__(self, image_paths, labels, batch_size, label_type="binary", dim=(1024, 1024, 1), augment=False, shuffle=False):
         self.dim = dim
         self.image_paths = image_paths
         self.labels = labels
+        self.label_type = label_type
         self.batch_size = batch_size
         self.augment = augment
         self.shuffle = shuffle
 
         self.data_handler = DataHandler()
-        self.image_preprocessor = ImagePreprocessor()
+        self.image_preprocessor = ChestRadiograph()
 
         ## For debugging ##
-        # self.get_processed_images(0, batch_size)
+        self.get_processed_images(0, batch_size)
     
     #returns number of batches
     def __len__(self):
@@ -63,9 +65,13 @@ class DataGenerator(keras.utils.Sequence):
 
         #initialize feature and target images to zeroes
         X_train = np.zeros(((end-start), image_height, image_width, image_channels), dtype=np.uint8) #is type 8-bit for pixel intensity values
-        Y_train = np.zeros((end-start), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
 
-        sys.stdout.flush() #what is this for?
+        if self.label_type.lower() == "binary":
+            Y_train = np.zeros((end-start), dtype=np.uint8) #is type bool because if pixel is 1, there is mask, 0 otherwise
+        else:
+            Y_train = np.zeros(((end-start), image_height, image_width, image_channels), dtype=np.bool) #is type bool because if pixel is 1, there is mask, 0 otherwise
+
+        sys.stdout.flush()
 
 
         for i in range(start, min(end, len(self.image_paths))):
@@ -76,8 +82,11 @@ class DataGenerator(keras.utils.Sequence):
             image_id = self.image_paths[i].split('\\')[-1].replace("."+str(self.image_preprocessor.preprocessed_ext), "")
             # print("Image id: "+str(image_id))
 
+
+            n = i-start
+
             # #apply dicom pixels
-            X_train[i-start] = np.expand_dims(png_image, axis=2)
+            X_train[n] = np.expand_dims(png_image, axis=2)
 
             masks = self.data_handler.find_masks(image_id=image_id, dataset=self.labels)
 
@@ -85,25 +94,31 @@ class DataGenerator(keras.utils.Sequence):
             try:
                 #if no masks for image, then skip
                 if len(masks)==0:
-                    continue
+                    if self.label_type.lower() == "binary":
+                        continue
+                    else:  
+                        Y_train[n] = np.zeros((image_height, image_width, image_channels))
                 else:
-                    # if type(df_full.loc[_id.split('/')[-1][:-4],' EncodedPixels']) == str:
                     last_mask = masks[-1]
 
-                    ## To do:
-                    ##   Account for all masks found 
-                    ## 
+                    if self.label_type.lower() == "binary":
+                        Y_train[n] = 1
+                    else:
+                        #if one mask
+                        if len(masks)==1:
+                            Y_train[n] = np.expand_dims(rle2mask(masks[0], image_height, image_width), axis=2)
+                        else:
+                            Y_train[n] = np.zeros((image_height, image_width, image_channels))
+                            for mask in masks:
+                                Y_train[n] =  Y_train[n] + np.expand_dims(rle2mask(mask, image_height, image_width), axis=2)
 
-                    #converts to boolean
-                    # Y_train[i] = np.expand_dims(rle2mask(last_mask, image_height, image_width), axis=2)
 
-
-                    Y_train[i-start] = 1
-
-
-            except KeyError:
-                # Y_train[n] = np.zeros((image_height, image_width, 1)) # Assume missing masks are empty masks.
-                Y_train[i-start] = 0
+            except KeyError as error:
+                print("Error: "+str(error))
+                if self.label_type.lower() == "binary":
+                    Y_train[n] = 0
+                else:
+                    Y_train[n] = np.zeros((image_height, image_width, image_channels)) # Assume missing masks are empty masks.
 
 
         #gets augmented images
@@ -111,6 +126,11 @@ class DataGenerator(keras.utils.Sequence):
 
         #normalize images
         X_train = self.image_preprocessor.normalize_data(X_train)
+
+        # print("X_train: "+str(X_train.shape))
+        # print("Y_train: "+str(Y_train.shape))
+
+        # input()
 
         return X_train, Y_train
 
@@ -136,12 +156,9 @@ class DataGenerator(keras.utils.Sequence):
 
         batches = 0
         for x_batch, y_batch in datagen.flow(images, labels, batch_size=self.batch_size):
-            # model.fit(x_batch, y_batch)
 
             image_return.extend(x_batch)
             label_return.extend(y_batch)
-
-            # print("Batch "+str(batches))
 
             batches += 1
             if batches >= len(images) / self.batch_size:
@@ -151,11 +168,5 @@ class DataGenerator(keras.utils.Sequence):
 
         image_return = np.array(image_return)
         label_return = np.array(label_return)
-
-        # print("Original images: "+str(len(images)))
-        # print("Original labels: "+str(len(labels)))
-        # print(image_return.shape)
-        # print("Total images: "+str(len(image_return)))
-        # print("Total labels: "+str(len(label_return)))
 
         return image_return, label_return
