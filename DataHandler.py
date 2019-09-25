@@ -1,3 +1,5 @@
+
+import os
 import pandas as pd #for reading data files
 import json
 
@@ -13,7 +15,7 @@ class DataHandler:
     test_labels_path = "./data/test_labels.csv"
 
     #hyperparameters file, used for training of models
-    hyperparameters_path = "./data/trained_models/hyperparameters.json"
+    hyperparameters_path = "./trained_models/hyperparameters.json"
 
 
     def __init__(self):
@@ -38,7 +40,7 @@ class DataHandler:
             print("Error, hyperparameters file doesn't exist: "+str(self.hyperparameters_path))
             return {}
 
-        with open('data.txt') as self.hyperparameters_path:
+        with open(self.hyperparameters_path) as json_file:
             data = json.load(json_file)
             
 
@@ -48,68 +50,93 @@ class DataHandler:
     #saves hyperparameters dictionary to the json file
     def save_hyperparameters(self, hyperparameters):
 
-        hyper_parameters = {}
-        hyper_parameters['binary'] = {}
-        hyper_parameters['segmentation'] = {}
+        # hyper_parameters = {}
+        # hyper_parameters['binary'] = {}
+        # hyper_parameters['segmentation'] = {}
 
-        hyper_parameters['binary']['cnn'] = {}
-        hyper_parameters['binary']['unet'] = {}
+        # hyper_parameters['binary']['cnn'] = {}
+        # hyper_parameters['binary']['unet'] = {}
 
-        hyper_parameters['segmentation']['cnn'] = {}
-        hyper_parameters['segmentation']['unet'] = {}
+        # hyper_parameters['segmentation']['cnn'] = {}
+        # hyper_parameters['segmentation']['unet'] = {}
 
-        hyper_parameters['binary']['cnn']['train_ratio'] = 0.7
-        hyper_parameters['binary']['cnn']['val_ratio'] = 0.2
-        hyper_parameters['binary']['cnn']['dataset_size'] = 200
-        hyper_parameters['binary']['cnn']['batch_size'] = 10
-        hyper_parameters['binary']['cnn']['epochs'] = 10
-        hyper_parameters['binary']['cnn']['augmented'] = True
-        hyper_parameters['binary']['cnn']['conv_layer_size'] = 32
-        hyper_parameters['binary']['cnn']['pool_size'] = 3
-        hyper_parameters['binary']['cnn']['filter_size'] = 3
-        hyper_parameters['binary']['cnn']['conv_activation'] = "selu"
-        hyper_parameters['binary']['cnn']['dense_activation'] = "selu"
-        hyper_parameters['binary']['cnn']['output_activation'] = "sigmoid"
-        hyper_parameters['binary']['cnn']['loss'] = "mean_squared_error"
-        hyper_parameters['binary']['cnn']['optimizer'] = "adam"
-        hyper_parameters['binary']['cnn']['last_layer_size'] = 128
-        hyper_parameters['binary']['cnn']['dropout'] = 0.25
+        # hyper_parameters['binary']['cnn']['train_ratio'] = 0.7
+        # hyper_parameters['binary']['cnn']['val_ratio'] = 0.2
+        # hyper_parameters['binary']['cnn']['dataset_size'] = 200
+        # hyper_parameters['binary']['cnn']['batch_size'] = 10
+        # hyper_parameters['binary']['cnn']['epochs'] = 10
+        # hyper_parameters['binary']['cnn']['augmented'] = True
+        # hyper_parameters['binary']['cnn']['conv_layer_size'] = 32
+        # hyper_parameters['binary']['cnn']['pool_size'] = 3
+        # hyper_parameters['binary']['cnn']['filter_size'] = 3
+        # hyper_parameters['binary']['cnn']['conv_activation'] = "selu"
+        # hyper_parameters['binary']['cnn']['dense_activation'] = "selu"
+        # hyper_parameters['binary']['cnn']['output_activation'] = "sigmoid"
+        # hyper_parameters['binary']['cnn']['loss'] = "mean_squared_error"
+        # hyper_parameters['binary']['cnn']['optimizer'] = "adam"
+        # hyper_parameters['binary']['cnn']['last_layer_size'] = 128
+        # hyper_parameters['binary']['cnn']['dropout'] = 0.25
 
-        hyper_parameters['binary']['unet']['train_ratio'] = 0.7
-        hyper_parameters['binary']['unet']['val_ratio'] = 0.2
-        hyper_parameters['binary']['unet']['dataset_size'] = 100
-        hyper_parameters['binary']['unet']['batch_size'] = 10
-        hyper_parameters['binary']['unet']['epochs'] = 5
-        hyper_parameters['binary']['unet']['augmented'] = True
-        hyper_parameters['binary']['unet']['start_size'] = 16
-        hyper_parameters['binary']['unet']['depth'] = 3
-        hyper_parameters['binary']['unet']['pool_size'] = 2
-        hyper_parameters['binary']['unet']['filter_size'] = 3
-        hyper_parameters['binary']['unet']['conv_activation'] = "selu"
-        hyper_parameters['binary']['unet']['dense_activation'] = "selu"
-        hyper_parameters['binary']['unet']['output_activation'] = "sigmoid"
+        # hyper_parameters['binary']['unet']['train_ratio'] = 0.7
+        # hyper_parameters['binary']['unet']['val_ratio'] = 0.2
+        # hyper_parameters['binary']['unet']['dataset_size'] = 100
+        # hyper_parameters['binary']['unet']['batch_size'] = 10
+        # hyper_parameters['binary']['unet']['epochs'] = 5
+        # hyper_parameters['binary']['unet']['augmented'] = True
+        # hyper_parameters['binary']['unet']['start_size'] = 16
+        # hyper_parameters['binary']['unet']['depth'] = 3
+        # hyper_parameters['binary']['unet']['pool_size'] = 2
+        # hyper_parameters['binary']['unet']['filter_size'] = 3
+        # hyper_parameters['binary']['unet']['conv_activation'] = "selu"
+        # hyper_parameters['binary']['unet']['dense_activation'] = "selu"
+        # hyper_parameters['binary']['unet']['output_activation'] = "sigmoid"
+        # hyper_parameters['binary']['unet']['loss'] = "mean_squared_error"
+        # hyper_parameters['binary']['unet']['optimizer'] = "adam"
+        # hyper_parameters['binary']['unet']['last_layer_size'] = 1
+        # hyper_parameters['binary']['unet']['dropout'] = 0
 
 
 
-        hyper_parameters['binary']['cnn']['train_ratio'] = 0.7
-        hyper_parameters['binary']['cnn']['val_ratio'] = 0.2
-        hyper_parameters['binary']['cnn']['dataset_size'] = 200
-        hyper_parameters['binary']['cnn']['batch_size'] = 10
-        hyper_parameters['binary']['cnn']['epochs'] = 10
-        hyper_parameters['binary']['cnn']['augmented'] = True
+        # hyper_parameters['segmentation']['cnn']['train_ratio'] = 0.7
+        # hyper_parameters['segmentation']['cnn']['val_ratio'] = 0.2
+        # hyper_parameters['segmentation']['cnn']['dataset_size'] = 200
+        # hyper_parameters['segmentation']['cnn']['batch_size'] = 10
+        # hyper_parameters['segmentation']['cnn']['epochs'] = 10
+        # hyper_parameters['segmentation']['cnn']['augmented'] = False
+        # hyper_parameters['segmentation']['cnn']['conv_layer_size'] = 32
+        # hyper_parameters['segmentation']['cnn']['pool_size'] = 3
+        # hyper_parameters['segmentation']['cnn']['filter_size'] = 3
+        # hyper_parameters['segmentation']['cnn']['conv_activation'] = "selu"
+        # hyper_parameters['segmentation']['cnn']['dense_activation'] = "selu"
+        # hyper_parameters['segmentation']['cnn']['output_activation'] = "sigmoid"
+        # hyper_parameters['segmentation']['cnn']['loss'] = "mean_squared_error"
+        # hyper_parameters['segmentation']['cnn']['optimizer'] = "adam"
+        # hyper_parameters['segmentation']['cnn']['last_layer_size'] = 128
+        # hyper_parameters['segmentation']['cnn']['dropout'] = 0.25
 
-        hyper_parameters['binary']['unet']['train_ratio'] = 0.7
-        hyper_parameters['binary']['unet']['val_ratio'] = 0.2
-        hyper_parameters['binary']['unet']['dataset_size'] = 100
-        hyper_parameters['binary']['unet']['batch_size'] = 10
-        hyper_parameters['binary']['unet']['epochs'] = 5
-        hyper_parameters['binary']['unet']['augmented'] = True
+        # hyper_parameters['segmentation']['unet']['train_ratio'] = 0.7
+        # hyper_parameters['segmentation']['unet']['val_ratio'] = 0.2
+        # hyper_parameters['segmentation']['unet']['dataset_size'] = 30
+        # hyper_parameters['segmentation']['unet']['batch_size'] = 10
+        # hyper_parameters['segmentation']['unet']['epochs'] = 5
+        # hyper_parameters['segmentation']['unet']['augmented'] = False
+        # hyper_parameters['segmentation']['unet']['start_size'] = 16
+        # hyper_parameters['segmentation']['unet']['depth'] = 3
+        # hyper_parameters['segmentation']['unet']['pool_size'] = 2
+        # hyper_parameters['segmentation']['unet']['filter_size'] = 3
+        # hyper_parameters['segmentation']['unet']['conv_activation'] = "selu"
+        # # hyper_parameters['segmentation']['unet']['dense_activation'] = ""
+        # hyper_parameters['segmentation']['unet']['output_activation'] = "sigmoid"
+        # hyper_parameters['segmentation']['unet']['loss'] = "dice_coef_loss"
+        # hyper_parameters['segmentation']['unet']['optimizer'] = "adam"
+        # hyper_parameters['segmentation']['unet']['last_layer_size'] = 1
+        # hyper_parameters['segmentation']['unet']['dropout'] = 0
 
 
 
         try:
             with open(self.hyperparameters_path, 'w') as outfile:
-                json.dump(hyperparameters, outfile)
+                json.dump(hyper_parameters, outfile)
         except Exception as error:
             print("Error, couldn't save hyperparameters: "+str(error))
 
@@ -175,3 +202,12 @@ class DataHandler:
 
 
         return training_set, validation_set, testing_set
+
+
+if __name__=="__main__":
+    data_handler = DataHandler()
+
+    # data_handler.save_hyperparameters({})
+    hyperparameters = data_handler.load_hyperparameters()
+
+    print(hyperparameters)

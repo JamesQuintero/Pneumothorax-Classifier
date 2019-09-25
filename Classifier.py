@@ -419,52 +419,7 @@ class Classifier(ABC):
 
         return conf_matrix
 
-
-    def statistical_analysis(self, target_data, prediction_data):
-
-
-        #calculates confusion matrix
-        conf_matrices = self.calculate_confusion_matrices(target_data, prediction_data)
-
-
-        agg_conf_matrices = np.zeros(conf_matrices[0].shape)
-        for x in range(0, len(conf_matrices)):
-            conf_matrix = conf_matrices[x]
-
-            print("Confusion matrix "+str(x)+": ")
-            print(conf_matrix)
-
-            
-            stats = self.calculate_statistical_measures(conf_matrix)
-
-            print()
-            print("Accuracy: "+str(stats['accuracy']))
-            print()
-            print("False Positive Rate: "+str(stats['FPR']))
-            print("False Negative Rate: "+str(stats['FNR']))
-            print("PPV (Precision): "+str(stats['precision']))
-            print()
-            print("Specificity: "+str(stats['specificity']))
-            print("Sensitivity: "+str(stats['sensitivity']))
-            print("Total (specificity + sensitivity): "+str(stats['total']))
-            print()
-            print("ROC: "+str(stats['ROC']))
-            print("F1: "+str(stats['F1']))
-            print("MCC: "+str(stats['MCC']))
-            print()
-            print()
-
-            agg_conf_matrices += conf_matrix
-
-
-
-
-        print("Aggregate confusion matrix: ")
-        print(agg_conf_matrices)
-
-
-        stats = self.calculate_statistical_measures(agg_conf_matrices)
-
+    def print_statistical_measures(self, stats):
         print()
         print("Accuracy: "+str(stats['accuracy']))
         print()
@@ -483,6 +438,62 @@ class Classifier(ABC):
         print()
 
 
+    def statistical_analysis(self, target_data, prediction_data):
+
+
+        #calculates confusion matrix
+        conf_matrices = self.calculate_confusion_matrices(target_data, prediction_data)
+
+
+        agg_conf_matrices = np.zeros(conf_matrices[0].shape)
+        all_stats = []
+        for x in range(0, len(conf_matrices)):
+            conf_matrix = conf_matrices[x]
+
+            print("Confusion matrix "+str(x)+": ")
+            print(conf_matrix)
+
+            
+            stats = self.calculate_statistical_measures(conf_matrix)
+
+            self.print_statistical_measures(stats)
+
+            agg_conf_matrices += conf_matrix
+            all_stats.append(stats)
+
+
+
+
+        print("Aggregate confusion matrix: ")
+        print(agg_conf_matrices)
+
+
+        stats = self.calculate_statistical_measures(agg_conf_matrices)
+
+        self.print_statistical_measures(stats)
+
+        average_stats = {}
+        #iterates through all statistical metrics
+        for stat in all_stats[0]:
+            average_stats[stat] = 0
+
+            #iterates through all confusion matrices' states
+            for x in range(0, len(all_stats)):
+                try:
+                    average_stats[stat] += all_stats[x][stat]
+                except Exception as error:
+                    continue
+
+            average_stats[stat] /= len(all_stats)
+
+        print()
+        print()
+        print("Average stats: ")
+        self.print_statistical_measures(average_stats)
+
+
+
+
 
     #predicts on the dataset, and prints a confusion matrix of the results
     def predict(self, classifier, feature_dataset, full_label_dataset, batch_size=1):
@@ -499,13 +510,13 @@ class Classifier(ABC):
         #gets predicted labels
         y_predict_non_category = [ t>0.5 for t in preds]
 
-        #prints number of example labels and their predictions
-        print()
-        print("Example (First 10): ")
-        for x in range(0, min(10, y_non_category.shape[0])):
-            print("  Actual: "+str(y_non_category[x])+", Pred: "+str(preds[x]))
-        print()
-        print()
+        # #prints number of example labels and their predictions
+        # print()
+        # print("Example (First 10): ")
+        # for x in range(0, min(10, y_non_category.shape[0])):
+        #     print("  Actual: "+str(y_non_category[x])+", Pred: "+str(preds[x]))
+        # print()
+        # print()
 
         self.statistical_analysis(y_non_category, y_predict_non_category)
 
@@ -537,7 +548,7 @@ class Classifier(ABC):
         # params = self.get_data_generator_params("train")
 
         batch_size = 10
-        epochs = 1
+        epochs = 10
 
         # training_generator = DataGenerator(X_train, Y, batch_size, **params)
 
@@ -697,7 +708,7 @@ class BinaryClassifier(Classifier):
         conv_activation = "selu"
         dense_activation = "selu"
         output_activation = "sigmoid"
-        # loss = "mean_squared_error"
+        loss = "mean_squared_error"
 
         # inputs = Input((self.image_width, self.image_height, 1))
         # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
@@ -850,7 +861,7 @@ class BinaryClassifier(Classifier):
         model = Model(inputs=inputs, outputs=dense2)
 
         # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
-        model.compile(optimizer=Adam(lr=1e-5), loss="mean_squared_error", metrics=["accuracy"])
+        model.compile(optimizer=Adam(lr=1e-5), loss=loss, metrics=["accuracy"])
 
         model.summary()
 
@@ -1204,4 +1215,4 @@ if __name__=="__main__":
     # CNN_classifier.train(dataset_size=200)
 
     # classifier.test(model_arch="cnn", dataset_size=10)
-    classifier.test(model_arch="unet", dataset_size=100)
+    classifier.test(model_arch="unet", dataset_size=10)
