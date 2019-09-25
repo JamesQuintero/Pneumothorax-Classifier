@@ -129,7 +129,6 @@ class DataGenerator(keras.utils.Sequence):
 
         # print("X_train: "+str(X_train.shape))
         # print("Y_train: "+str(Y_train.shape))
-
         # input()
 
         return X_train, Y_train

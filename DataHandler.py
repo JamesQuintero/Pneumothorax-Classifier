@@ -1,15 +1,19 @@
 import pandas as pd #for reading data files
+import json
 
 from mask_functions import rle2mask
 
 
 """
-Handles label data reading, like image ID's and masks
+Handles any data handling, label data reading (image ID's and masks), hyperaparameters, etc. 
 """
 class DataHandler:
 
     train_labels_path = "./data/train_labels.csv"
     test_labels_path = "./data/test_labels.csv"
+
+    #hyperparameters file, used for training of models
+    hyperparameters_path = "./data/trained_models/hyperparameters.json"
 
 
     def __init__(self):
@@ -26,6 +30,88 @@ class DataHandler:
     def read_test_labels(self):
         df = pd.read_csv(self.test_labels_path)
         return df
+
+    #returns hyperparameter dictionary from hyperparameter file
+    def load_hyperparameters(self):
+
+        if os.path.isfile(self.hyperparameters_path)==False:
+            print("Error, hyperparameters file doesn't exist: "+str(self.hyperparameters_path))
+            return {}
+
+        with open('data.txt') as self.hyperparameters_path:
+            data = json.load(json_file)
+            
+
+            return data
+
+
+    #saves hyperparameters dictionary to the json file
+    def save_hyperparameters(self, hyperparameters):
+
+        hyper_parameters = {}
+        hyper_parameters['binary'] = {}
+        hyper_parameters['segmentation'] = {}
+
+        hyper_parameters['binary']['cnn'] = {}
+        hyper_parameters['binary']['unet'] = {}
+
+        hyper_parameters['segmentation']['cnn'] = {}
+        hyper_parameters['segmentation']['unet'] = {}
+
+        hyper_parameters['binary']['cnn']['train_ratio'] = 0.7
+        hyper_parameters['binary']['cnn']['val_ratio'] = 0.2
+        hyper_parameters['binary']['cnn']['dataset_size'] = 200
+        hyper_parameters['binary']['cnn']['batch_size'] = 10
+        hyper_parameters['binary']['cnn']['epochs'] = 10
+        hyper_parameters['binary']['cnn']['augmented'] = True
+        hyper_parameters['binary']['cnn']['conv_layer_size'] = 32
+        hyper_parameters['binary']['cnn']['pool_size'] = 3
+        hyper_parameters['binary']['cnn']['filter_size'] = 3
+        hyper_parameters['binary']['cnn']['conv_activation'] = "selu"
+        hyper_parameters['binary']['cnn']['dense_activation'] = "selu"
+        hyper_parameters['binary']['cnn']['output_activation'] = "sigmoid"
+        hyper_parameters['binary']['cnn']['loss'] = "mean_squared_error"
+        hyper_parameters['binary']['cnn']['optimizer'] = "adam"
+        hyper_parameters['binary']['cnn']['last_layer_size'] = 128
+        hyper_parameters['binary']['cnn']['dropout'] = 0.25
+
+        hyper_parameters['binary']['unet']['train_ratio'] = 0.7
+        hyper_parameters['binary']['unet']['val_ratio'] = 0.2
+        hyper_parameters['binary']['unet']['dataset_size'] = 100
+        hyper_parameters['binary']['unet']['batch_size'] = 10
+        hyper_parameters['binary']['unet']['epochs'] = 5
+        hyper_parameters['binary']['unet']['augmented'] = True
+        hyper_parameters['binary']['unet']['start_size'] = 16
+        hyper_parameters['binary']['unet']['depth'] = 3
+        hyper_parameters['binary']['unet']['pool_size'] = 2
+        hyper_parameters['binary']['unet']['filter_size'] = 3
+        hyper_parameters['binary']['unet']['conv_activation'] = "selu"
+        hyper_parameters['binary']['unet']['dense_activation'] = "selu"
+        hyper_parameters['binary']['unet']['output_activation'] = "sigmoid"
+
+
+
+        hyper_parameters['binary']['cnn']['train_ratio'] = 0.7
+        hyper_parameters['binary']['cnn']['val_ratio'] = 0.2
+        hyper_parameters['binary']['cnn']['dataset_size'] = 200
+        hyper_parameters['binary']['cnn']['batch_size'] = 10
+        hyper_parameters['binary']['cnn']['epochs'] = 10
+        hyper_parameters['binary']['cnn']['augmented'] = True
+
+        hyper_parameters['binary']['unet']['train_ratio'] = 0.7
+        hyper_parameters['binary']['unet']['val_ratio'] = 0.2
+        hyper_parameters['binary']['unet']['dataset_size'] = 100
+        hyper_parameters['binary']['unet']['batch_size'] = 10
+        hyper_parameters['binary']['unet']['epochs'] = 5
+        hyper_parameters['binary']['unet']['augmented'] = True
+
+
+
+        try:
+            with open(self.hyperparameters_path, 'w') as outfile:
+                json.dump(hyperparameters, outfile)
+        except Exception as error:
+            print("Error, couldn't save hyperparameters: "+str(error))
 
 
     #returns list of mask coordinates in RLE format corresponding to image_id

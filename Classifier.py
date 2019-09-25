@@ -264,9 +264,6 @@ class Classifier(ABC):
 
 
     def dice_coef_loss(self, y_true, y_pred):
-        print("Y_true: "+str(y_true.shape))
-        print("Y_pred: "+str(y_pred.shape))
-
         return 1-self.dice_coef(y_true, y_pred)
 
     #returns CNN
@@ -327,7 +324,7 @@ class Classifier(ABC):
         return classifier
 
 
-    #returns U-net
+    #returns very simple U-net
     #architecture source: https://github.com/yihui-he/u-net
     # and https://github.com/jocicmarko/ultrasound-nerve-segmentation/
     @abstractmethod
@@ -339,7 +336,6 @@ class Classifier(ABC):
         conv_activation = "selu"
         dense_activation = "selu"
         output_activation = "sigmoid"
-        # loss = "mean_squared_error"
 
 
         inputs = Input((self.image_width, self.image_height, 1))
@@ -356,14 +352,6 @@ class Classifier(ABC):
         conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
         conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
         conv3 = BatchNormalization()(conv3)
-        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
-
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=3)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
 
         up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
         conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
@@ -375,8 +363,6 @@ class Classifier(ABC):
         conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
         conv9 = BatchNormalization()(conv9)
 
-        # conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
-
         conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
         # model = Model(inputs=inputs, outputs=conv10)
 
@@ -387,12 +373,10 @@ class Classifier(ABC):
         dense1 = Flatten()(conv10)
 
         dense2 = Dense(units = 1, activation = output_activation)(dense1)
-        # # # # classifier.add(Dropout(0.25))
 
         
         model = Model(inputs=inputs, outputs=dense2)
 
-        # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
         model.compile(optimizer=Adam(lr=1e-5), loss="mean_squared_error", metrics=["accuracy"])
 
         model.summary()
@@ -426,46 +410,60 @@ class Classifier(ABC):
         return data_generator
 
 
-    #predicts on the dataset, and prints a confusion matrix of the results
-    def predict(self, classifier, feature_dataset, full_label_dataset, batch_size=1):
-
-        # #Validation prediction
-        # params = {'dim': (self.image_height,self.image_width,1),
-        #           'augment': False,
-        #           'shuffle': False}
-
-        # generator = DataGenerator(feature_dataset, full_label_dataset, batch_size, **params)
-
-        generator = self.create_data_generator(feature_dataset, full_label_dataset, batch_size, "test")
-
-        print(generator)
-
-        preds = classifier.predict_generator(generator)
-
-
-        print("predictions: "+str(preds.shape))
-
-
-        #gets actual labels
-        X_images, y_non_category = generator.get_processed_images(start=0, end=len(feature_dataset))
-        #gets predicted labels
-        y_predict_non_category = [ t>0.5 for t in preds]
-
-        #prints number of example labels and their predictions
-        print()
-        print("Example (First 10): ")
-        for x in range(0, 10):
-            print("  Actual: "+str(y_non_category[x])+", Pred: "+str(preds[x]))
-        print()
-
+    #returns list of individual confusion matrices if segmentation, and list of size 1 for binary
+    @abstractmethod
+    def calculate_confusion_matrices(self, target_data, prediction_data):
 
         #calculates confusion matrix
         conf_matrix = confusion_matrix(y_non_category, y_predict_non_category)
-        print("Confusion matrix: ")
-        print(conf_matrix)
 
-        
-        stats = self.calculate_statistical_measures(conf_matrix)
+        return conf_matrix
+
+
+    def statistical_analysis(self, target_data, prediction_data):
+
+
+        #calculates confusion matrix
+        conf_matrices = self.calculate_confusion_matrices(target_data, prediction_data)
+
+
+        agg_conf_matrices = np.zeros(conf_matrices[0].shape)
+        for x in range(0, len(conf_matrices)):
+            conf_matrix = conf_matrices[x]
+
+            print("Confusion matrix "+str(x)+": ")
+            print(conf_matrix)
+
+            
+            stats = self.calculate_statistical_measures(conf_matrix)
+
+            print()
+            print("Accuracy: "+str(stats['accuracy']))
+            print()
+            print("False Positive Rate: "+str(stats['FPR']))
+            print("False Negative Rate: "+str(stats['FNR']))
+            print("PPV (Precision): "+str(stats['precision']))
+            print()
+            print("Specificity: "+str(stats['specificity']))
+            print("Sensitivity: "+str(stats['sensitivity']))
+            print("Total (specificity + sensitivity): "+str(stats['total']))
+            print()
+            print("ROC: "+str(stats['ROC']))
+            print("F1: "+str(stats['F1']))
+            print("MCC: "+str(stats['MCC']))
+            print()
+            print()
+
+            agg_conf_matrices += conf_matrix
+
+
+
+
+        print("Aggregate confusion matrix: ")
+        print(agg_conf_matrices)
+
+
+        stats = self.calculate_statistical_measures(agg_conf_matrices)
 
         print()
         print("Accuracy: "+str(stats['accuracy']))
@@ -481,6 +479,35 @@ class Classifier(ABC):
         print("ROC: "+str(stats['ROC']))
         print("F1: "+str(stats['F1']))
         print("MCC: "+str(stats['MCC']))
+        print()
+        print()
+
+
+
+    #predicts on the dataset, and prints a confusion matrix of the results
+    def predict(self, classifier, feature_dataset, full_label_dataset, batch_size=1):
+
+        generator = self.create_data_generator(feature_dataset, full_label_dataset, batch_size, "test")
+        preds = classifier.predict_generator(generator)
+
+
+        print("predictions: "+str(preds.shape))
+
+
+        #gets actual labels
+        X_images, y_non_category = generator.get_processed_images(start=0, end=len(feature_dataset))
+        #gets predicted labels
+        y_predict_non_category = [ t>0.5 for t in preds]
+
+        #prints number of example labels and their predictions
+        print()
+        print("Example (First 10): ")
+        for x in range(0, min(10, y_non_category.shape[0])):
+            print("  Actual: "+str(y_non_category[x])+", Pred: "+str(preds[x]))
+        print()
+        print()
+
+        self.statistical_analysis(y_non_category, y_predict_non_category)
 
 
     #trains CNN
@@ -510,7 +537,7 @@ class Classifier(ABC):
         # params = self.get_data_generator_params("train")
 
         batch_size = 10
-        epochs = 10
+        epochs = 1
 
         # training_generator = DataGenerator(X_train, Y, batch_size, **params)
 
@@ -540,7 +567,7 @@ class Classifier(ABC):
 
 
         #perform prediction on validation portion
-        self.predict(feature_dataset=X_validate, full_label_dataset=Y, batch_size=10)
+        # self.predict(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=10)
 
 
         classifier.save("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
@@ -557,7 +584,8 @@ class Classifier(ABC):
 
         #loads the model
         try:
-            classifier = load_model("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
+            classifier = load_model("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5", 
+                                    custom_objects={'dice_coef_loss': self.dice_coef_loss, 'dice_coef': self.dice_coef})
         except Exception as error:
             print(error)
             print("Model doesn't exist for "+str(model_arch))
@@ -579,7 +607,7 @@ Handles binary classification training, validation, and testing
 class BinaryClassifier(Classifier):
     def __init__(self):
         super().__init__()
-        pass
+
 
     def print_something(self):
         print("Something")
@@ -598,6 +626,8 @@ class BinaryClassifier(Classifier):
         # loss = "binary_crossentropy"
         loss = "mean_squared_error"
         optimizer = "adam"
+        last_layer_size = 128
+        dropout = 0.25
 
         classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
 
@@ -606,25 +636,25 @@ class BinaryClassifier(Classifier):
         #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        classifier.add(Dropout(dropout))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        classifier.add(Dropout(dropout))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        classifier.add(Dropout(dropout))
 
         # Adding a second convolutional layer
         classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(0.25))
+        classifier.add(Dropout(dropout))
 
         # # Adding a second convolutional layer
         # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
@@ -646,8 +676,8 @@ class BinaryClassifier(Classifier):
         classifier.add(Flatten())
 
         #128 is an arbitrary number that can be decreased to lower computation time, and increased for better accuracy
-        classifier.add(Dense(units = 128, activation = dense_activation))
-        classifier.add(Dropout(0.25))
+        classifier.add(Dense(units = last_layer_size, activation = dense_activation))
+        classifier.add(Dropout(dropout))
 
         classifier.add(Dense(units = 1, activation = output_activation))
 
@@ -832,6 +862,23 @@ class BinaryClassifier(Classifier):
 
         generator = DataGenerator(feature_dataset, label_dataset, batch_size, "binary", **params)
         return generator
+
+    #returns list of size 1 of confusion matrix
+    def calculate_confusion_matrices(self, target_data, prediction_data):
+
+        prediction_data = np.array(prediction_data)
+
+        print("Target data: "+str(target_data.shape))
+        print("Prediction data: "+str(prediction_data.shape))
+
+        #calculates confusion matrix
+        conf_matrix = confusion_matrix(target_data, prediction_data)
+        print("Confusion matrix: ")
+        print(conf_matrix)
+
+        return [conf_matrix]
+
+
 
 
 """
@@ -1109,6 +1156,27 @@ class SegmentationClassifier(Classifier):
         generator = DataGenerator(feature_dataset, label_dataset, batch_size, "segment", **params)
         return generator
 
+    #returns list of size 1 of confusion matrix
+    def calculate_confusion_matrices(self, target_data, prediction_data):
+
+
+        prediction_data = np.array(prediction_data)
+
+        #calculates confusion matrix on each image for the pixels
+        confusion_matrices = []
+        for x in range(0, target_data.shape[0]):
+
+            #flattens 512x512x1 True/False 2D array into 262144 list of True/False
+            targets = target_data[x].flatten()
+            predictions = prediction_data[x].flatten()
+
+            #calculates confusion matrix
+            conf_matrix = confusion_matrix(targets, predictions)
+
+            confusion_matrices.append(conf_matrix)
+
+        return confusion_matrices
+
 
 
 
@@ -1130,9 +1198,10 @@ class SegmentationClassifier(Classifier):
 
 
 if __name__=="__main__":
+    # classifier = BinaryClassifier()
     classifier = SegmentationClassifier()
 
     # CNN_classifier.train(dataset_size=200)
 
-    classifier.train(model_arch="unet", dataset_size=30)
-    
+    # classifier.test(model_arch="cnn", dataset_size=10)
+    classifier.test(model_arch="unet", dataset_size=100)
