@@ -2,6 +2,10 @@
 import os
 import pandas as pd #for reading data files
 import json
+from datetime import date
+import shutil
+
+import numpy as np
 
 from mask_functions import rle2mask
 
@@ -16,6 +20,8 @@ class DataHandler:
 
     #hyperparameters file, used for training of models
     hyperparameters_path = "./trained_models/hyperparameters.json"
+
+    training_session_dir = "./training_sessions/"
 
 
     def __init__(self):
@@ -32,6 +38,90 @@ class DataHandler:
     def read_test_labels(self):
         df = pd.read_csv(self.test_labels_path)
         return df
+
+    #returns directory path to save training session to
+    def get_training_session_path(self, project="chest_radiograph", classification_type="binary", model_arch="cnn", date="2019-9-26", training_session_num=1):
+        return self.training_session_dir+"/"+str(project.lower())+"/"+str(classification_type.lower())+"/"+str(model_arch.lower())+"/"+str(date.lower())+"/"+str(training_session_num)
+
+
+    #creates new training session dir in the proper directory in ./training_sessions
+    def create_new_training_session_dir(self, project="", classification_type="", model_arch=""):
+
+        #gets current date in iso 8061 format (YYYY-MM-DD)
+        cur_date = self.get_today()
+
+        training_session_path = self.get_training_session_path(project=project, 
+                                                    classification_type=classification_type,
+                                                    model_arch=model_arch, 
+                                                    date=cur_date, 
+                                                    training_session_num=1)
+
+        # print("Training session path: "+str(training_session_path))
+
+        #gets parent directory
+        training_session_parent = training_session_path[:-1]
+
+        # print("Training session parent: "+str(training_session_parent))
+        
+        #lists all training sessions for current day
+        try:
+            training_sessions = os.listdir(training_session_parent)
+
+            #converts directories to ints
+            training_sessions = [int(i) for i in training_sessions] 
+            #sorts list
+            training_sessions.sort()
+
+
+            new_session_number = int(training_sessions[-1])+1
+        except Exception as error:
+            #training sessions don't exist for path, so start it
+            # pass
+            new_session_number = 1
+
+
+
+        session_dir = self.create_new_training_session(project=project,
+                                                            classification_type=classification_type,
+                                                            model_arch=model_arch,
+                                                            date=cur_date,
+                                                            training_session_num=new_session_number)
+
+        print("Session dir: "+str(session_dir))
+
+        return session_dir
+
+    #creates training session dir, and handles parent directories not existing
+    def create_new_training_session(self, project="chest_radiograph", classification_type="binary", model_arch="cnn", date="2019-9-26", training_session_num=1):
+
+        path = self.training_session_dir+"/"
+
+        dirs = [project.lower(), classification_type.lower(), model_arch.lower(), date.lower(), training_session_num]
+
+        #creates parent directories if need be
+        for x in range(0, len(dirs)):
+
+            if os.path.exists(path)==False:
+                os.mkdir(path)
+
+            path += str(dirs[x])+"/"
+
+
+        #creates the training session
+        os.mkdir(path)
+
+
+        return path
+        
+
+
+    #returns iso 8601 date format string of today
+    def get_today(self):
+        return str(date.today())
+
+
+    def get_hyperparameters_path(self):
+        return self.hyperparameters_path
 
     #returns hyperparameter dictionary from hyperparameter file
     def load_hyperparameters(self):
@@ -140,13 +230,29 @@ class DataHandler:
         # hyper_parameters['segmentation']['unet']['last_layer_size'] = 1
         # hyper_parameters['segmentation']['unet']['dropout'] = 0
 
+        self.save_to_json(self.hyperparameters_path, hyperparameters)
 
+
+
+    #dumps data into json file to be located at path
+    def save_to_json(self, path, data):
+        #converts numpy numbers to python numbers
+        def convert(number):
+            if isinstance(number, np.int64):
+                return int(number)
+            elif isinstance(number, np.float64):
+                return float(number)
 
         try:
-            with open(self.hyperparameters_path, 'w') as outfile:
-                json.dump(hyperparameters, outfile)
+            with open(path, 'w') as outfile:
+                json.dump(data, outfile, default=convert, sort_keys=True, indent=4)
         except Exception as error:
-            print("Error, couldn't save hyperparameters: "+str(error))
+            print("Error, couldn't save data to json: "+str(error))
+
+    #copies hyperparameter file to new_path
+    def copy_hyperparameters(self, new_path):
+        shutil.copy2(self.hyperparameters_path, new_path)
+
 
 
     #returns list of mask coordinates in RLE format corresponding to image_id

@@ -6,3 +6,5 @@ Ideas:
 *) Done - Portion the training data to include 50% pneumothorax and 50% non-pneumothorax. 
 
 *) Use a residual net like resnet50 or some other u-net instead of old CNN. 
+
+*) Instead of using thresholds to turn the body black outside the ribs, turn it into static so that it isn't turned into the same color and consistency as the pneumothorax. 

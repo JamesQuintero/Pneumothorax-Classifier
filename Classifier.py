@@ -8,6 +8,7 @@ from mask_functions import rle2mask
 import sys
 import os
 import random
+import json
 
 #ML libraries
 import numpy as np
@@ -38,6 +39,7 @@ Handles differen types (binary, segmentation) classification training, validatio
 
 """
 class Classifier(ABC):
+    project = ""
 
     image_width = 512
     image_height = 512
@@ -50,10 +52,13 @@ class Classifier(ABC):
 
     hyperparameters = {}
 
-    def __init__(self):
+    def __init__(self, project):
         self.dicom_reader = DICOMReader()
         self.data_handler = DataHandler()
-        self.image_preprocessor = ChestRadiograph()
+
+        self.project = project.lower()
+        if self.project=="chest_radiograph":
+            self.image_preprocessor = ChestRadiograph()
 
         self.hyperparameters = self.data_handler.load_hyperparameters()
 
@@ -399,24 +404,28 @@ class Classifier(ABC):
 
     def print_statistical_measures(self, stats):
         print()
-        print("Accuracy: "+str(stats['accuracy']))
-        print()
-        print("False Positive Rate: "+str(stats['FPR']))
-        print("False Negative Rate: "+str(stats['FNR']))
-        print("PPV (Precision): "+str(stats['precision']))
-        print()
-        print("Specificity: "+str(stats['specificity']))
-        print("Sensitivity: "+str(stats['sensitivity']))
-        print("Total (specificity + sensitivity): "+str(stats['total']))
-        print()
-        print("ROC: "+str(stats['ROC']))
-        print("F1: "+str(stats['F1']))
-        print("MCC: "+str(stats['MCC']))
-        print()
+        print("----------------------------------")
+        print("Accuracy:                "+str(stats['accuracy']))
+        print("----------------------------------")
+        print("False Positive Rate:     "+str(stats['FPR']))
+        print("False Negative Rate:     "+str(stats['FNR']))
+        print("PPV (Precision):         "+str(stats['precision']))
+        print("----------------------------------")
+        print("Specificity:             "+str(stats['specificity']))
+        print("Sensitivity:             "+str(stats['sensitivity']))
+        print("Total (spec + sens):     "+str(stats['total']))
+        print("----------------------------------")
+        print("ROC:                     "+str(stats['ROC']))
+        print("F1:                      "+str(stats['F1']))
+        print("MCC:                     "+str(stats['MCC']))
+        print("----------------------------------")
         print()
 
 
     def statistical_analysis(self, target_data, prediction_data):
+
+        print("Target data: "+str(len(target_data)))
+        print("Prediction data: "+str(len(prediction_data)))
 
 
         #calculates confusion matrix
@@ -446,9 +455,9 @@ class Classifier(ABC):
         print(agg_conf_matrices)
 
 
-        stats = self.calculate_statistical_measures(agg_conf_matrices)
+        agg_stats = self.calculate_statistical_measures(agg_conf_matrices)
 
-        self.print_statistical_measures(stats)
+        self.print_statistical_measures(agg_stats)
 
         average_stats = {}
         #iterates through all statistical metrics
@@ -469,14 +478,16 @@ class Classifier(ABC):
         print("Average stats: ")
         self.print_statistical_measures(average_stats)
 
+        return (all_stats, agg_stats)
+
 
 
 
 
     #predicts on the dataset, and prints a confusion matrix of the results
-    def predict(self, classifier, feature_dataset, full_label_dataset, batch_size=1):
+    def prediction_analysis(self, classifier, feature_dataset, full_label_dataset, batch_size=1):
 
-        generator = self.create_data_generator(feature_dataset, full_label_dataset, batch_size, "test")
+        generator = self.create_data_generator(feature_dataset, full_label_dataset, 1, "test")
         preds = classifier.predict_generator(generator)
 
 
@@ -488,18 +499,21 @@ class Classifier(ABC):
         #gets predicted labels
         y_predict_non_category = [ t>0.5 for t in preds]
 
-        # #prints number of example labels and their predictions
-        # print()
-        # print("Example (First 10): ")
-        # for x in range(0, min(10, y_non_category.shape[0])):
-        #     print("  Actual: "+str(y_non_category[x])+", Pred: "+str(preds[x]))
-        # print()
-        # print()
-
-        self.statistical_analysis(y_non_category, y_predict_non_category)
 
 
-    #trains CNN
+        return self.statistical_analysis(y_non_category, y_predict_non_category)
+
+
+    #Bagging
+    def bagging(self):
+        pass
+
+    #K-fold cross validation
+    def cross_validation(self):
+        pass
+
+    #trains model with model_arch architecture
+    #returns the Keras model, training dataset, validation dataset, testing dataset, and all labels
     @abstractmethod
     def train(self, model_arch="cnn", dataset_size=100, train_ratio=0.7, val_ratio=0.2, batch_size=1, epochs=1):
 
@@ -532,6 +546,12 @@ class Classifier(ABC):
                                 epochs=epochs)
 
 
+        classifier.save("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
+
+        return classifier, X_train, X_validate, X_test, Y
+
+    #saves training session, like the trained model, hyperparameters, and results, for future review
+    def save_training_session(self, classification_type, classifier, model_arch, training_analysis, validation_analysis):
 
         ## Plot training history ##
         # # plot the training loss and accuracy
@@ -548,13 +568,29 @@ class Classifier(ABC):
         # plt.legend(loc="lower left")
         # plt.savefig(args["plot"])
 
-
-        #perform prediction on validation portion
-        self.predict(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=10)
+        session_dir = self.data_handler.create_new_training_session_dir(project=self.project, classification_type=classification_type, model_arch=model_arch)
 
 
-        classifier.save("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
+        #saves model
+        try:
+            classifier.save(session_dir+"/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
+        except Exception as error:
+            print("Error, couldn't save model: "+str(error))
 
+        #saves hyperparameters
+        new_hyperparameter_path = session_dir+"/hyperparameters.json"
+        self.data_handler.copy_hyperparameters(new_hyperparameter_path)
+
+
+
+        #Saves training prediction analysis
+        to_save = {"all_stats": training_analysis[0], "agg_stats": training_analysis[1]}
+        self.data_handler.save_to_json(session_dir+"/train_stats.json", to_save)
+
+
+        #Saves Validation prediction analysis
+        to_save = {'all_stats': validation_analysis[0], 'agg_stats': validation_analysis[1]}
+        self.data_handler.save_to_json(session_dir+"/validation_stats.json", to_save)
 
 
     #performs predictions and subsequent statistic calculations on unofficial test dataset
@@ -575,8 +611,8 @@ class Classifier(ABC):
             return
 
 
-
-        self.predict(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=5)
+        #performs statistical analysis and returns the result
+        results = self.prediction_analysis(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=5)
 
 
 
@@ -588,8 +624,8 @@ Handles binary classification training, validation, and testing
 
 """
 class BinaryClassifier(Classifier):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, project):
+        super().__init__(project)
 
 
     def print_something(self):
@@ -598,6 +634,7 @@ class BinaryClassifier(Classifier):
     #creates CNN sculpted for binary classification
     def create_CNN(self):
         CNN_size = self.hyperparameters['binary']['cnn']['conv_layer_size']
+        num_conv_layers = self.hyperparameters['binary']['cnn']['num_conv_layers']
         pool_size = (self.hyperparameters['binary']['cnn']['pool_size'], self.hyperparameters['binary']['cnn']['pool_size'])
         filter_size = (self.hyperparameters['binary']['cnn']['filter_size'], self.hyperparameters['binary']['cnn']['filter_size'])
         CNN_activation = self.hyperparameters['binary']['cnn']['conv_activation']
@@ -613,50 +650,29 @@ class BinaryClassifier(Classifier):
 
 
 
-        # Initialising the CNN
+
         classifier = Sequential()
-        classifier.add(Conv2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
+
 
         # Step 2 - Pooling
         #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
         #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
+
+
+        classifier.add(Conv2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
         classifier.add(Dropout(dropout))
 
-        # Adding a second convolutional layer
-        classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        classifier.add(MaxPooling2D(pool_size = pool_size))
-        # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(dropout))
 
-        # Adding a second convolutional layer
-        classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        classifier.add(MaxPooling2D(pool_size = pool_size))
-        # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(dropout))
+        #adds hidden convolutional layers
+        for x in range(1, num_conv_layers):
+            classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+            classifier.add(MaxPooling2D(pool_size = pool_size))
+            # classifier.add(BatchNormalization(axis=3))
+            classifier.add(Dropout(dropout))
 
-        # Adding a second convolutional layer
-        classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        classifier.add(MaxPooling2D(pool_size = pool_size))
-        # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(dropout))
 
-        # # Adding a second convolutional layer
-        # classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
-
-        # # Adding a second convolutional layer
-        # classifier.add(Conv2D(CNN_size, filter_size, activation = CNN_activation))
-        # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # classifier.add(Dropout(0.25))
-
-        # # Adding a second convolutional layer
-        # classifier.add(Conv2D(CNN_size, filter_size, activation = CNN_activation))
-        # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # classifier.add(Dropout(0.25))
 
         #flattents the layers
         classifier.add(Flatten())
@@ -874,14 +890,49 @@ class BinaryClassifier(Classifier):
         return [conf_matrix]
 
     #trains binary classifier with specified hyperparameters
-    def train(self, model_arch="cnn", dataset_size=100):
+    def train(self, model_arch="cnn"):
+        #loads hyperparameters because they might have been changed in the main menu
+        self.hyperparameters = self.data_handler.load_hyperparameters()
 
         train_ratio = self.hyperparameters['binary'][model_arch]['train_ratio']
         validation_ratio = self.hyperparameters['binary'][model_arch]['val_ratio']
         batch_size = self.hyperparameters['binary'][model_arch]['batch_size']
         epochs = self.hyperparameters['binary'][model_arch]['epochs']
+        dataset_size = self.hyperparameters['binary'][model_arch]['dataset_size']
 
-        super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
+        #trains model, which returns the trained model and dataset segments
+        classifier, X_train, X_validate, X_test, Y = super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
+
+
+        # print("X_train: "+str(len(X_train)))
+        # print("X_validate: "+str(len(X_validate)))
+        # print("X_test: "+str(len(X_test)))
+        # print("Y: "+str(len(Y)))
+
+
+        #performs prediction on training portion
+        print("--Training prediction analysis--")
+        try:
+            training_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_train, full_label_dataset=Y, batch_size=batch_size)
+        except Exception as error:
+            print("Couldn't perform training prediction analysis.")
+            print(error)
+            training_prediction_analysis = []
+
+
+        #perform prediction on validation portion
+        print("--Validation prediction analysis--")
+        try:
+            validation_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=batch_size)
+        except Exception as error:
+            print("Couldn't perform validation prediction analysis.")
+            print(error)
+            validation_prediction_analysis = []
+
+
+
+        self.save_training_session("binary", classifier, model_arch, training_prediction_analysis, validation_prediction_analysis)
+
 
 
 
@@ -891,8 +942,8 @@ Handles segmentation classification training, validation, and testing
 
 """
 class SegmentationClassifier(Classifier):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, project):
+        super().__init__(project)
 
     #creates CNN sculpted for segmentation classification
     def create_CNN(self):
@@ -1201,14 +1252,42 @@ class SegmentationClassifier(Classifier):
         return confusion_matrices
 
     #trains segmentation with specified hyperparameters
-    def train(self, model_arch="unet", dataset_size=100):
+    def train(self, model_arch="unet"):
+        self.hyperparameters = self.data_handler.load_hyperparameters()
 
         train_ratio = self.hyperparameters['segmentation'][model_arch]['train_ratio']
         validation_ratio = self.hyperparameters['segmentation'][model_arch]['val_ratio']
         batch_size = self.hyperparameters['segmentation'][model_arch]['batch_size']
         epochs = self.hyperparameters['segmentation'][model_arch]['epochs']
 
-        super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
+        dataset_size = self.hyperparameters['segmentation'][model_arch]['dataset_size']
+
+        classifier, X_train, X_validate, X_test, Y = super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
+
+
+
+        #performs prediction on training portion
+        print("--Training prediction analysis--")
+        try:
+            training_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_train, full_label_dataset=Y, batch_size=batch_size)
+        except Exception as error:
+            print("Couldn't perform training prediction analysis.")
+            print(error)
+            training_prediction_analysis = []
+
+
+        #perform prediction on validation portion
+        print("--Validation prediction analysis--")
+        try:
+            validation_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=batch_size)
+        except Exception as error:
+            print("Couldn't perform validation prediction analysis.")
+            print(error)
+            validation_prediction_analysis = []
+
+
+
+        self.save_training_session("binary", classifier, model_arch, training_prediction_analysis, validation_prediction_analysis)
 
 
 
@@ -1231,10 +1310,10 @@ class SegmentationClassifier(Classifier):
 
 
 if __name__=="__main__":
-    # classifier = BinaryClassifier()
-    classifier = SegmentationClassifier()
+    classifier = BinaryClassifier("chest_radiograph")
+    # classifier = SegmentationClassifier()
 
     # CNN_classifier.train(dataset_size=200)
 
-    classifier.train(model_arch="unet", dataset_size=100)
+    classifier.train(model_arch="cnn", dataset_size=10)
     # classifier.test(model_arch="unet", dataset_size=10)

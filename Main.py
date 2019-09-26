@@ -38,6 +38,7 @@ class Main:
         print("-- Menu --")
         print("1) Preprocess scans")
         print("2) Train/Test model")
+        print("3) View Train/Test results")
 
         print("0) Quit")
         choice = int(input("Choice: "))
@@ -46,8 +47,12 @@ class Main:
         #Preprocess images
         if choice==1:
             self.preprocess()
+        #Train/Test models
         elif choice==2:
-            self.cnn_classifier()
+            self.classifier()
+        #View Train/Test results
+        elif choice==3:
+            self.view_results()
 
 
         #Quits the program
@@ -62,9 +67,14 @@ class Main:
 
 
     """
-    CNN Classifier menu
+    Classifier menu
     """
-    def cnn_classifier(self):
+    def classifier(self):
+
+        print()
+        print()
+        print("-- Classifier Menu --")
+        print()
 
         print("Classification type: ")
         print("1) Binary classification")
@@ -73,10 +83,10 @@ class Main:
         classifier_choice = int(input("Choice: "))
 
         if classifier_choice == 1:
-            classifier = BinaryClassifier()
+            classifier = BinaryClassifier("chest_radiograph")
             classifier_type = "binary"
         elif classifier_choice==2:
-            classifier = SegmentationClassifier()
+            classifier = SegmentationClassifier("chest_radiograph")
             classifier_type = "segmentation"
         else:
             print("Improper classification type")
@@ -119,8 +129,8 @@ class Main:
             return
 
 
-        print()
-        dataset_size = int(input("Dataset size: "))
+        # print()
+        # dataset_size = int(input("Dataset size: "))
 
 
 
@@ -145,9 +155,9 @@ class Main:
                 choice = input("Continue modification? (y/n): ")
 
 
-            classifier.train(model_arch, dataset_size)
+            classifier.train(model_arch)
         elif step == "test":
-            classifier.test(model_arch, dataset_size)
+            classifier.test(model_arch)
 
 
     #allows user to modify hyperparameters 
@@ -209,6 +219,12 @@ class Main:
     def preprocess(self):
         self.image_preprocessor = ImagePreprocessor()
 
+        print()
+        print()
+        print("-- Preprocessor Menu --")
+        print()
+
+
         print("Which dataset portion to preprocess?")
         print("1) Training dataset")
         print("2) Testing dataset")
@@ -229,6 +245,11 @@ class Main:
             replace = True
 
         self.image_preprocessor.bulk_preprocessing(dataset_type=dataset_type, replace=replace)
+
+
+    #View Train/Test results
+    def view_results(self):
+        pass
 
 
         

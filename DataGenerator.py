@@ -48,7 +48,7 @@ class DataGenerator(keras.utils.Sequence):
     def __getitem__(self, index):
 
         start = self.batch_size * index
-        end = self.batch_size * (index+1)
+        end = min(self.batch_size * (index+1), len(self.image_paths))
 
         batch_x, batch_y = self.get_processed_images(start, end)
 
