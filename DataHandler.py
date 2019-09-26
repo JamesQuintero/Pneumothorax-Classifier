@@ -40,11 +40,19 @@ class DataHandler:
             print("Error, hyperparameters file doesn't exist: "+str(self.hyperparameters_path))
             return {}
 
-        with open(self.hyperparameters_path) as json_file:
-            data = json.load(json_file)
-            
+        try:
+            with open(self.hyperparameters_path) as json_file:
+                data = json.load(json_file)
+                
 
-            return data
+                return data
+        except Exception as error:
+            print("Error, couldn't load hyperparameters: "+str(error))
+            return {}
+
+    #prints hyperparameter dictionary in a neat format
+    def print_hyperparameters(self, hyperparameters):
+        print(json.dumps(hyperparameters, indent=4, sort_keys=True))
 
 
     #saves hyperparameters dictionary to the json file
@@ -136,7 +144,7 @@ class DataHandler:
 
         try:
             with open(self.hyperparameters_path, 'w') as outfile:
-                json.dump(hyper_parameters, outfile)
+                json.dump(hyperparameters, outfile)
         except Exception as error:
             print("Error, couldn't save hyperparameters: "+str(error))
 
@@ -198,10 +206,23 @@ class DataHandler:
         validation_set = dataset[train_cutoff : val_cutoff]
         testing_set = dataset[val_cutoff : ]
 
-
-
-
         return training_set, validation_set, testing_set
+
+    #checks if string is a float
+    def is_float(self, string):
+        try:
+            float(string)
+            return True
+        except ValueError:
+            return False
+
+    #checks if string is a float
+    def is_int(self, string):
+        try:
+            int(string)
+            return True
+        except ValueError:
+            return False
 
 
 if __name__=="__main__":

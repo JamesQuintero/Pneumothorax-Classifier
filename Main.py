@@ -37,7 +37,7 @@ class Main:
         print()
         print("-- Menu --")
         print("1) Preprocess scans")
-        print("2) Classifier")
+        print("2) Train/Test model")
 
         print("0) Quit")
         choice = int(input("Choice: "))
@@ -70,12 +70,14 @@ class Main:
         print("1) Binary classification")
         print("2) Segmentation classification")
 
-        choice = int(input("Choice: "))
+        classifier_choice = int(input("Choice: "))
 
-        if choice == 1:
+        if classifier_choice == 1:
             classifier = BinaryClassifier()
-        elif choice==2:
+            classifier_type = "binary"
+        elif classifier_choice==2:
             classifier = SegmentationClassifier()
+            classifier_type = "segmentation"
         else:
             print("Improper classification type")
             return
@@ -105,12 +107,12 @@ class Main:
         print("1) CNN")
         print("2) U-net")
 
-        choice = int(input("Choice: "))
+        model_arch_choice = int(input("Choice: "))
 
         model_arch = ""
-        if choice==1:
+        if model_arch_choice==1:
             model_arch = "cnn"
-        elif choice==2:
+        elif model_arch_choice==2:
             model_arch = "unet"
         else:
             print("Improper model architecture")
@@ -120,12 +122,85 @@ class Main:
         print()
         dataset_size = int(input("Dataset size: "))
 
-            # classifier.train()
+
 
         if step == "train":
+            #if user is trianing, ask if they want to modify hyperparameters
+            print()
+            print("Hyperparameters: ")
+            self.print_hyperparameters(classifier_type, model_arch)
+            
+
+            print()
+            choice = input("Modify? (y/n): ")
+
+            while choice.lower()=="y" or choice.lower()=="yes":
+                self.modify_hyperparameters(classifier_type, model_arch)
+
+                print()
+                print("New hyperparameters: ")
+                self.print_hyperparameters(classifier_type, model_arch)
+
+                print()
+                choice = input("Continue modification? (y/n): ")
+
+
             classifier.train(model_arch, dataset_size)
         elif step == "test":
             classifier.test(model_arch, dataset_size)
+
+
+    #allows user to modify hyperparameters 
+    def modify_hyperparameters(self, classifier_type, model_arch):
+        hyperparameters = self.data_handler.load_hyperparameters()
+
+        #failed to modify hyperparameters due to incorrect classifier types or model architectures
+        if classifier_type not in hyperparameters or model_arch not in hyperparameters[classifier_type]:
+            return False
+
+
+        key = input("Field to modify: ").lower()
+
+        while key not in hyperparameters[classifier_type][model_arch]:
+            print("Invalid key, please enter again. ") 
+            key = input("Field to modify: ")
+
+        new_value = input("New value: ")
+
+        #makes sure the new value matches the data type as the old value
+        if self.data_handler.is_int(new_value) and type(hyperparameters[classifier_type][model_arch][key])==int:
+            new_value = int(new_value)
+        elif self.data_handler.is_float(new_value) and type(hyperparameters[classifier_type][model_arch][key])==float:
+            new_value = float(new_value)
+        elif new_value.lower()=="false" and type(hyperparameters[classifier_type][model_arch][key])==bool:
+            new_value = False
+        elif new_value.lower()=="true":
+            new_value = True
+        else:
+            print("Error, new value must be same datatype as old value.")
+            return
+
+
+        hyperparameters[classifier_type][model_arch][key] = new_value
+
+        self.data_handler.save_hyperparameters(hyperparameters)
+
+
+    def print_hyperparameters(self, classifier_type=None, model_arch=None):
+        hyperparameters = self.data_handler.load_hyperparameters()
+
+
+        #if classifier type isn't specified, print all hyperparameters
+        if classifier_type==None:
+            self.data_handler.print_hyperparameters(hyperparameters)
+            return
+        
+        #if model arch isn't specified, print all model architectures for specified classifier type
+        if model_arch==None:
+            self.data_handler.print_hyperparameters(hyperparameters[classifier_type])
+
+        #both classifier type and model architecture are specified, so print hyperparameters for it
+        self.data_handler.print_hyperparameters(hyperparameters[classifier_type][model_arch])
 
 
     """
