@@ -13,7 +13,7 @@
             "filter_size": 3,
             "last_layer_size": 128,
             "loss": "mean_squared_error",
-            "num_conv_layers": 4,
+            "num_conv_layers": 5,
             "optimizer": "adam",
             "output_activation": "softmax",
             "pool_size": 3,

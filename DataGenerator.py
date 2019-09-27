@@ -146,8 +146,9 @@ class DataGenerator(keras.utils.Sequence):
         label_return.extend(labels)
 
         # construct the image generator for data augmentation
+        #don't include zoom, because that might remove the pneumothorax in the already cropped images
         datagen = ImageDataGenerator(rotation_range=30, width_shift_range=0.1,
-            height_shift_range=0.1, shear_range=0.2, zoom_range=0.2,
+            height_shift_range=0.1, shear_range=0.2, zoom_range=0.0,
             horizontal_flip=True, fill_mode="nearest")
 
         datagen.fit(images)

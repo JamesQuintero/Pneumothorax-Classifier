@@ -18,11 +18,13 @@ from sklearn.metrics import confusion_matrix
 import keras
 from keras import backend as K
 from keras.layers import Input
+from keras.layers import *
+
 from keras.models import Sequential
 from keras.models import Model
 from keras.models import load_model
 
-from keras.layers import *
+from keras.callbacks import EarlyStopping
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
@@ -512,14 +514,40 @@ class Classifier(ABC):
     def cross_validation(self):
         pass
 
-    #trains model with model_arch architecture
-    #returns the Keras model, training dataset, validation dataset, testing dataset, and all labels
-    @abstractmethod
-    def train(self, model_arch="cnn", dataset_size=100, train_ratio=0.7, val_ratio=0.2, batch_size=1, epochs=1):
-
-        max_images = dataset_size
-        X = self.get_processed_image_paths(balanced=True, max_num=max_images)
+    """
+    takes a dataset, splits into n_splits+1 sections, then split each of those into train and test sections, 
+    then trains a model on each section and ensembles them together to hopefully have one better model that's more stable
+    than each model together
+    https://www.sciencedirect.com/science/article/pii/S0925231214007644
+    """
+    #*args are the important arguments for calling train
+    def resampling_ensemble(self, n_splits = 0, *args):
+        dataset_size = args['dataset_size']
+        X = self.get_processed_image_paths(balanced=args['balanced'], max_num=dataset_size)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+
+        for section in range(0, n_splits+1):
+            start = section/(n_splits+1)*dataset_size
+
+            # X_section = X[]
+
+
+
+
+
+    """
+    trains model with model_arch architecture
+    returns the Keras model, training dataset, validation dataset, testing dataset, and all labels
+    """
+    @abstractmethod
+    def train(self, model_arch="cnn", dataset_size=100, balanced=False, X=None, Y=None, train_ratio=0.7, val_ratio=0.2, batch_size=1, epochs=1):
+
+        #load features and targets if they aren't provided
+        if X==None:
+            X = self.get_processed_image_paths(balanced=balanced, max_num=dataset_size)
+        if Y==None:
+            Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
 
         #splits into training, validation, and test datasets
@@ -540,10 +568,15 @@ class Classifier(ABC):
 
         training_generator = self.create_data_generator(X_train, Y, batch_size, "train")
 
+        # patient early stopping
+        early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3)
+
         # fits the model on batches with real-time data augmentation:
         classifier.fit_generator(generator=training_generator,
                                 steps_per_epoch=len(X_train) / batch_size,
-                                epochs=epochs)
+                                epochs=epochs,
+                                validation_data=self.create_data_generator(X_validate, Y, batch_size, "test"), 
+                                callbacks = [early_stopping])
 
 
         classifier.save("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
@@ -899,9 +932,18 @@ class BinaryClassifier(Classifier):
         batch_size = self.hyperparameters['binary'][model_arch]['batch_size']
         epochs = self.hyperparameters['binary'][model_arch]['epochs']
         dataset_size = self.hyperparameters['binary'][model_arch]['dataset_size']
+        balanced = self.hyperparameters['binary'][model_arch]['balanced']
+
+        params = {"model_arch": model_arch, 
+                    "dataset_size": dataset_size, 
+                    "balanced": balanced,
+                    "train_ratio": train_ratio,
+                    "val_ratio": validation_ratio, 
+                    "batch_size": batch_size, 
+                    "epochs": epochs}
 
         #trains model, which returns the trained model and dataset segments
-        classifier, X_train, X_validate, X_test, Y = super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
+        classifier, X_train, X_validate, X_test, Y = super().train(**params)
 
 
         # print("X_train: "+str(len(X_train)))
@@ -1259,10 +1301,18 @@ class SegmentationClassifier(Classifier):
         validation_ratio = self.hyperparameters['segmentation'][model_arch]['val_ratio']
         batch_size = self.hyperparameters['segmentation'][model_arch]['batch_size']
         epochs = self.hyperparameters['segmentation'][model_arch]['epochs']
-
+        balanced = self.hyperparameters['binary'][model_arch]['balanced']
         dataset_size = self.hyperparameters['segmentation'][model_arch]['dataset_size']
 
-        classifier, X_train, X_validate, X_test, Y = super().train(model_arch, dataset_size, train_ratio, validation_ratio, batch_size, epochs)
+        params = {"model_arch": model_arch, 
+                    "dataset_size": dataset_size, 
+                    "balanced": balanced,
+                    "train_ratio": train_ratio,
+                    "val_ratio": validation_ratio, 
+                    "batch_size": batch_size, 
+                    "epochs": epochs}
+
+        classifier, X_train, X_validate, X_test, Y = super().train(**params)
 
 
 

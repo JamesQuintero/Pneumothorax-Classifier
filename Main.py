@@ -177,18 +177,51 @@ class Main:
 
         new_value = input("New value: ")
 
-        #makes sure the new value matches the data type as the old value
-        if self.data_handler.is_int(new_value) and type(hyperparameters[classifier_type][model_arch][key])==int:
-            new_value = int(new_value)
-        elif self.data_handler.is_float(new_value) and type(hyperparameters[classifier_type][model_arch][key])==float:
-            new_value = float(new_value)
-        elif new_value.lower()=="false" and type(hyperparameters[classifier_type][model_arch][key])==bool:
-            new_value = False
+
+        #Makes sure the user's new value has the same data type as the old value
+        success = False
+        if self.data_handler.is_int(new_value):
+            if type(hyperparameters[classifier_type][model_arch][key])==int:
+                new_value = int(new_value)
+                success = True
+        elif self.data_handler.is_float(new_value):
+            if type(hyperparameters[classifier_type][model_arch][key])==float:
+                new_value = float(new_value)
+                success = True
+        elif new_value.lower()=="false":
+            if type(hyperparameters[classifier_type][model_arch][key])==bool:
+                new_value = False
+                success = True
         elif new_value.lower()=="true":
-            new_value = True
+            if type(hyperparameters[classifier_type][model_arch][key])==bool:
+                new_value = True
+                success = True
+        #previous value was a string
         else:
+            if type(hyperparameters[classifier_type][model_arch][key])==str:
+                new_value = str(new_value)
+                success = True
+
+
+        #couldn't successfully change value
+        if success==False:
             print("Error, new value must be same datatype as old value.")
             return
+
+
+
+        # #makes sure the new value matches the data type as the old value
+        # if self.data_handler.is_int(new_value) and type(hyperparameters[classifier_type][model_arch][key])==int:
+        #     new_value = int(new_value)
+        # elif self.data_handler.is_float(new_value) and type(hyperparameters[classifier_type][model_arch][key])==float:
+        #     new_value = float(new_value)
+        # elif new_value.lower()=="false" and type(hyperparameters[classifier_type][model_arch][key])==bool:
+        #     new_value = False
+        # elif new_value.lower()=="true":
+        #     new_value = True
+        # else:
+        #     print("Error, new value must be same datatype as old value.")
+        #     return
 
 
         hyperparameters[classifier_type][model_arch][key] = new_value
