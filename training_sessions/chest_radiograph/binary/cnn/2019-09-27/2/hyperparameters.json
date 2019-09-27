@@ -6,7 +6,7 @@
             "batch_size": 10,
             "conv_activation": "selu",
             "conv_layer_size": 32,
-            "dataset_size": 30,
+            "dataset_size": 300,
             "dense_activation": "selu",
             "dropout": 0.25,
             "epochs": 10,
@@ -15,9 +15,8 @@
             "loss": "mean_squared_error",
             "num_conv_layers": 4,
             "optimizer": "adam",
-            "output_activation": "sigmoid",
+            "output_activation": "softmax",
             "pool_size": 3,
-            "resampling_ensemble_n_splits": 1,
             "train_ratio": 0.7,
             "val_ratio": 0.2
         },
@@ -37,7 +36,6 @@
             "optimizer": "adam",
             "output_activation": "sigmoid",
             "pool_size": 2,
-            "resampling_ensemble_n_splits": 0,
             "start_size": 16,
             "train_ratio": 0.7,
             "val_ratio": 0.2
@@ -60,7 +58,6 @@
             "optimizer": "adam",
             "output_activation": "sigmoid",
             "pool_size": 3,
-            "resampling_ensemble_n_splits": 0,
             "train_ratio": 0.7,
             "val_ratio": 0.2
         },
@@ -79,7 +76,6 @@
             "optimizer": "adam",
             "output_activation": "softmax",
             "pool_size": 2,
-            "resampling_ensemble_n_splits": 0,
             "start_size": 16,
             "train_ratio": 0.7,
             "val_ratio": 0.2

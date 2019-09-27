@@ -155,7 +155,17 @@ class Main:
                 choice = input("Continue modification? (y/n): ")
 
 
-            classifier.train(model_arch)
+            print()
+            print("Model training type: ")
+            print("1) Standard")
+            print("2) Resample Ensembling")
+            choice = int(input("Choice: "))
+
+            training_type = "regular"
+            if choice==2:
+                training_type = "resampling_ensemble"
+
+            classifier.train_evaluate(model_arch, training_type)
         elif step == "test":
             classifier.test(model_arch)
 

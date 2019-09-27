@@ -424,10 +424,11 @@ class Classifier(ABC):
         print()
 
 
-    def statistical_analysis(self, target_data, prediction_data):
+    def statistical_analysis(self, target_data, prediction_data, verbose=False):
 
-        print("Target data: "+str(len(target_data)))
-        print("Prediction data: "+str(len(prediction_data)))
+        if verbose:
+            print("Target data: "+str(len(target_data)))
+            print("Prediction data: "+str(len(prediction_data)))
 
 
         #calculates confusion matrix
@@ -438,14 +439,13 @@ class Classifier(ABC):
         all_stats = []
         for x in range(0, len(conf_matrices)):
             conf_matrix = conf_matrices[x]
-
-            print("Confusion matrix "+str(x)+": ")
-            print(conf_matrix)
-
             
             stats = self.calculate_statistical_measures(conf_matrix)
 
-            self.print_statistical_measures(stats)
+            if verbose:
+                print("Confusion matrix "+str(x)+": ")
+                print(conf_matrix)
+                self.print_statistical_measures(stats)
 
             agg_conf_matrices += conf_matrix
             all_stats.append(stats)
@@ -453,13 +453,15 @@ class Classifier(ABC):
 
 
 
-        print("Aggregate confusion matrix: ")
-        print(agg_conf_matrices)
 
 
         agg_stats = self.calculate_statistical_measures(agg_conf_matrices)
 
-        self.print_statistical_measures(agg_stats)
+        if verbose:
+            print("Aggregate confusion matrix: ")
+            print(agg_conf_matrices)
+            self.print_statistical_measures(agg_stats)
+
 
         average_stats = {}
         #iterates through all statistical metrics
@@ -475,10 +477,13 @@ class Classifier(ABC):
 
             average_stats[stat] /= len(all_stats)
 
-        print()
-        print()
-        print("Average stats: ")
-        self.print_statistical_measures(average_stats)
+        if verbose:
+            print()
+            print()
+            print("Average stats: ")
+            self.print_statistical_measures(average_stats)
+
+
 
         return (all_stats, agg_stats)
 
@@ -520,18 +525,67 @@ class Classifier(ABC):
     than each model together
     https://www.sciencedirect.com/science/article/pii/S0925231214007644
     """
-    #*args are the important arguments for calling train
-    def resampling_ensemble(self, n_splits = 0, *args):
-        dataset_size = args['dataset_size']
-        X = self.get_processed_image_paths(balanced=args['balanced'], max_num=dataset_size)
+    # *args are the important arguments for calling train
+    def resampling_ensemble(self, n_splits = 0, **train_args):
+
+        print("Train arguments: "+str(train_args))
+        dataset_size = train_args['dataset_size']
+        X = self.get_processed_image_paths(balanced=train_args['balanced'], max_num=dataset_size)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
+        print("Dataset size: "+str(dataset_size))
+        print("n_splits: "+str(n_splits))
 
+        section_size = int(dataset_size/(n_splits+1))
+
+        print("Section size: "+str(section_size))
+        print()
+
+
+        classifiers = []
+        X_trains = []
+        X_validates = []
+        X_tests = []
+        Ys = []
+        results = []
         for section in range(0, n_splits+1):
-            start = section/(n_splits+1)*dataset_size
+            print("Section: "+str(section+1)+"/"+str(n_splits+1))
+            start = section*section_size
+            end = (section+1)*section_size
 
-            # X_section = X[]
+            # print("Start: "+str(start))
+            # print("End: "+str(end))
 
+            X_section = X[start:end]
+
+            # print(self)
+
+
+            #trains on this section
+            train_args['X'] = X_section
+            train_args['Y'] = Y
+
+
+            classifier, X_train_section, X_validate_section, X_test_section, Y_section = self.train(**train_args)
+            classifiers.append(classifier)
+            X_trains.append(X_train_section)
+            X_validates.append(X_validate_section)
+            X_tests.append(X_test_section)
+            Ys.append(Y_section)
+
+            #performs prediction analysis on results
+            prediction_analysis = self.prediction_analysis(classifier=classifier, 
+                                                        feature_dataset=X_validate_section, 
+                                                        full_label_dataset=Y_section, 
+                                                        batch_size=train_args['batch_size'])
+
+            results.append(prediction_analysis)
+
+
+        print("")
+
+
+        return classifiers, X_trains, X_validates, X_tests, Ys
 
 
 
@@ -540,13 +594,13 @@ class Classifier(ABC):
     trains model with model_arch architecture
     returns the Keras model, training dataset, validation dataset, testing dataset, and all labels
     """
-    @abstractmethod
+    # @abstractmethod
     def train(self, model_arch="cnn", dataset_size=100, balanced=False, X=None, Y=None, train_ratio=0.7, val_ratio=0.2, batch_size=1, epochs=1):
 
         #load features and targets if they aren't provided
-        if X==None:
+        if X is None:
             X = self.get_processed_image_paths(balanced=balanced, max_num=dataset_size)
-        if Y==None:
+        if Y is None:
             Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
 
@@ -583,8 +637,73 @@ class Classifier(ABC):
 
         return classifier, X_train, X_validate, X_test, Y
 
+
+    #trains binary classifier with specified hyperparameters, then evaluates the results and saves to disk
+    @abstractmethod
+    def train_evaluate(self, classification_type="", model_arch="cnn", training_type="regular"):
+        #loads hyperparameters because they might have been changed in the main menu
+        self.hyperparameters = self.data_handler.load_hyperparameters()
+
+        train_ratio = self.hyperparameters[classification_type][model_arch]['train_ratio']
+        validation_ratio = self.hyperparameters[classification_type][model_arch]['val_ratio']
+        batch_size = self.hyperparameters[classification_type][model_arch]['batch_size']
+        epochs = self.hyperparameters[classification_type][model_arch]['epochs']
+        dataset_size = self.hyperparameters[classification_type][model_arch]['dataset_size']
+        balanced = self.hyperparameters[classification_type][model_arch]['balanced']
+        n_splits = self.hyperparameters[classification_type][model_arch]['resampling_ensemble_n_splits']
+
+        params = {"model_arch": model_arch, 
+                    "dataset_size": dataset_size, 
+                    "balanced": balanced,
+                    "train_ratio": train_ratio,
+                    "val_ratio": validation_ratio, 
+                    "batch_size": batch_size, 
+                    "epochs": epochs}
+
+
+        if training_type == "regular":
+            # #trains model, which returns the trained model and dataset segments
+            # classifier, X_train, X_validate, X_test, Y = self.train(**params)
+            classifiers, X_trains, X_validates, X_tests, Ys = self.resampling_ensemble(n_splits = 0, **params)
+        elif training_type == "resampling_ensemble":
+            classifiers, X_trains, X_validates, X_tests, Ys = self.resampling_ensemble(n_splits = n_splits, **params)
+
+
+
+        # print("X_train: "+str(len(X_train[0])))
+        # print("X_validate: "+str(len(X_validate[0])))
+        # print("X_test: "+str(len(X_test[0])))
+        # print("Y: "+str(len(Y[0])))
+
+
+
+        #performs prediction on training portion
+        print("--Training prediction analysis--")
+        training_prediction_analysis = []
+        try:
+            for i in range(0, len(classifiers)):
+                training_prediction_analysis.append(self.prediction_analysis(classifier=classifiers[i], feature_dataset=X_trains[i], full_label_dataset=Ys[i], batch_size=batch_size))
+        except Exception as error:
+            print("Couldn't perform training prediction analysis.")
+            print(error)
+
+
+        #perform prediction on validation portion
+        print("--Validation prediction analysis--")
+        validation_prediction_analysis = []
+        try:
+            for i in range(0, len(classifiers)):
+                validation_prediction_analysis.append(self.prediction_analysis(classifier=classifiers[i], feature_dataset=X_validates[i], full_label_dataset=Ys[i], batch_size=batch_size))
+        except Exception as error:
+            print("Couldn't perform validation prediction analysis.")
+            print(error)
+
+
+
+        self.save_training_session("binary", training_type, classifiers, model_arch, training_prediction_analysis, validation_prediction_analysis)
+
     #saves training session, like the trained model, hyperparameters, and results, for future review
-    def save_training_session(self, classification_type, classifier, model_arch, training_analysis, validation_analysis):
+    def save_training_session(self, classification_type, training_type, classifiers, model_arch, training_analysis, validation_analysis):
 
         ## Plot training history ##
         # # plot the training loss and accuracy
@@ -604,9 +723,10 @@ class Classifier(ABC):
         session_dir = self.data_handler.create_new_training_session_dir(project=self.project, classification_type=classification_type, model_arch=model_arch)
 
 
-        #saves model
+        #saves models
         try:
-            classifier.save(session_dir+"/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
+            for x in range(0, len(classifiers)):
+                classifiers[x].save(session_dir+"/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model_"+str(x+1)+"_of_"+str(len(classifiers))+".h5")
         except Exception as error:
             print("Error, couldn't save model: "+str(error))
 
@@ -614,16 +734,16 @@ class Classifier(ABC):
         new_hyperparameter_path = session_dir+"/hyperparameters.json"
         self.data_handler.copy_hyperparameters(new_hyperparameter_path)
 
-
-
         #Saves training prediction analysis
-        to_save = {"all_stats": training_analysis[0], "agg_stats": training_analysis[1]}
-        self.data_handler.save_to_json(session_dir+"/train_stats.json", to_save)
+        for x in range(0, len(training_analysis)):
+            to_save = {"all_stats": training_analysis[x][0], "agg_stats": training_analysis[x][1]}
+            self.data_handler.save_to_json(session_dir+"/train_stats_"+str(x+1)+"_of_"+str(len(training_analysis))+".json", to_save)
 
 
         #Saves Validation prediction analysis
-        to_save = {'all_stats': validation_analysis[0], 'agg_stats': validation_analysis[1]}
-        self.data_handler.save_to_json(session_dir+"/validation_stats.json", to_save)
+        for x in range(0, len(validation_analysis)):
+            to_save = {'all_stats': validation_analysis[x][0], 'agg_stats': validation_analysis[x][1]}
+            self.data_handler.save_to_json(session_dir+"/validation_stats_"+str(x+1)+"_of_"+str(len(training_analysis))+".json", to_save)
 
 
     #performs predictions and subsequent statistic calculations on unofficial test dataset
@@ -645,7 +765,7 @@ class Classifier(ABC):
 
 
         #performs statistical analysis and returns the result
-        results = self.prediction_analysis(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=5)
+        results = self.prediction_analysis(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=5, verbose=True)
 
 
 
@@ -922,58 +1042,9 @@ class BinaryClassifier(Classifier):
 
         return [conf_matrix]
 
-    #trains binary classifier with specified hyperparameters
-    def train(self, model_arch="cnn"):
-        #loads hyperparameters because they might have been changed in the main menu
-        self.hyperparameters = self.data_handler.load_hyperparameters()
 
-        train_ratio = self.hyperparameters['binary'][model_arch]['train_ratio']
-        validation_ratio = self.hyperparameters['binary'][model_arch]['val_ratio']
-        batch_size = self.hyperparameters['binary'][model_arch]['batch_size']
-        epochs = self.hyperparameters['binary'][model_arch]['epochs']
-        dataset_size = self.hyperparameters['binary'][model_arch]['dataset_size']
-        balanced = self.hyperparameters['binary'][model_arch]['balanced']
-
-        params = {"model_arch": model_arch, 
-                    "dataset_size": dataset_size, 
-                    "balanced": balanced,
-                    "train_ratio": train_ratio,
-                    "val_ratio": validation_ratio, 
-                    "batch_size": batch_size, 
-                    "epochs": epochs}
-
-        #trains model, which returns the trained model and dataset segments
-        classifier, X_train, X_validate, X_test, Y = super().train(**params)
-
-
-        # print("X_train: "+str(len(X_train)))
-        # print("X_validate: "+str(len(X_validate)))
-        # print("X_test: "+str(len(X_test)))
-        # print("Y: "+str(len(Y)))
-
-
-        #performs prediction on training portion
-        print("--Training prediction analysis--")
-        try:
-            training_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_train, full_label_dataset=Y, batch_size=batch_size)
-        except Exception as error:
-            print("Couldn't perform training prediction analysis.")
-            print(error)
-            training_prediction_analysis = []
-
-
-        #perform prediction on validation portion
-        print("--Validation prediction analysis--")
-        try:
-            validation_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=batch_size)
-        except Exception as error:
-            print("Couldn't perform validation prediction analysis.")
-            print(error)
-            validation_prediction_analysis = []
-
-
-
-        self.save_training_session("binary", classifier, model_arch, training_prediction_analysis, validation_prediction_analysis)
+    def train_evaluate(self, model_arch="cnn", training_type="regular"):
+        super().train_evaluate(classification_type="binary", model_arch=model_arch, training_type=training_type)
 
 
 
@@ -1301,7 +1372,7 @@ class SegmentationClassifier(Classifier):
         validation_ratio = self.hyperparameters['segmentation'][model_arch]['val_ratio']
         batch_size = self.hyperparameters['segmentation'][model_arch]['batch_size']
         epochs = self.hyperparameters['segmentation'][model_arch]['epochs']
-        balanced = self.hyperparameters['binary'][model_arch]['balanced']
+        balanced = self.hyperparameters['segmentation'][model_arch]['balanced']
         dataset_size = self.hyperparameters['segmentation'][model_arch]['dataset_size']
 
         params = {"model_arch": model_arch, 
@@ -1337,7 +1408,7 @@ class SegmentationClassifier(Classifier):
 
 
 
-        self.save_training_session("binary", classifier, model_arch, training_prediction_analysis, validation_prediction_analysis)
+        self.save_training_session("segmentation", classifier, model_arch, training_prediction_analysis, validation_prediction_analysis)
 
 
 
