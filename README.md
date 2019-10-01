@@ -7,8 +7,10 @@ Current techniques:
 * Image augmentation
 * Train dataset split by 50% positive and 50% negative
 * resampling ensemble
+* K-fold cross validation
+* Early stopping and saving best model during training
 * Architectures include CNN and U-net
-* Classification type icnludes binary and segmentation
+* Classification type includes binary and segmentation
 
 
-This project is being designed to be somewhat easy to add in a new type of radiograph and require minimal changes to the code. 
+This project is being designed to be easy to add in a new 2D radiograph of another body part, and require minimal changes to the code. 
