@@ -71,103 +71,56 @@ class Main:
     """
     def classifier(self):
 
-        print()
-        print()
-        print("-- Classifier Menu --")
-        print()
-
-        print("Classification type: ")
-        print("1) Binary classification")
-        print("2) Segmentation classification")
-
-        classifier_choice = int(input("Choice: "))
-
-        if classifier_choice == 1:
-            classifier = BinaryClassifier("chest_radiograph")
-            classifier_type = "binary"
-        elif classifier_choice==2:
-            classifier = SegmentationClassifier("chest_radiograph")
-            classifier_type = "segmentation"
-        else:
-            print("Improper classification type")
-            return
-
-
-        print()
-        print("Model building step: ")
-        print("1) Train")
-        print("2) Test")
-
-        choice = int(input("Choice: "))
-
-        step = ""
-
-        #user wants to train a model
-        if choice==1:
-            step = "train"
-        elif choice==2:
-            step = "test"
-        else:
-            print("Improper model building step")
-            return
-
-
-        print()
-        print("Model architecture: ")
-        print("1) CNN")
-        print("2) U-net")
-
-        model_arch_choice = int(input("Choice: "))
-
-        model_arch = ""
-        if model_arch_choice==1:
-            model_arch = "cnn"
-        elif model_arch_choice==2:
-            model_arch = "unet"
-        else:
-            print("Improper model architecture")
-            return
-
-
-        # print()
-        # dataset_size = int(input("Dataset size: "))
-
-
-
-        if step == "train":
-            #if user is trianing, ask if they want to modify hyperparameters
+        while True:
             print()
-            print("Hyperparameters: ")
-            self.print_hyperparameters(classifier_type, model_arch)
+            print()
+            print("-- Classifier Menu --")
+            print()
+
+            classifier, classifier_type = self.initialize_classifier()
+            if classifier is None:
+                return
+
+            print()
+
+
+            model_building_step = self.get_model_building_step()
+            if model_building_step == "":
+                return
+
+
+            print()
             
 
-            print()
-            choice = input("Modify? (y/n): ")
-
-            while choice.lower()=="y" or choice.lower()=="yes":
-                self.modify_hyperparameters(classifier_type, model_arch)
-
-                print()
-                print("New hyperparameters: ")
-                self.print_hyperparameters(classifier_type, model_arch)
-
-                print()
-                choice = input("Continue modification? (y/n): ")
+            model_arch = self.get_model_architecture()
+            if model_arch == "":
+                return
 
 
             print()
-            print("Model training type: ")
-            print("1) Standard")
-            print("2) Resample Ensembling")
-            choice = int(input("Choice: "))
 
-            training_type = "regular"
-            if choice==2:
-                training_type = "resampling_ensemble"
 
-            classifier.train_evaluate(model_arch, training_type)
-        elif step == "test":
-            classifier.test(model_arch)
+            #user is training
+            if model_building_step == "train":
+                #ask if they want to modify hyperparameters
+                self.user_modify_hyperparameters(classifier_type, model_arch)
+
+                print()
+
+                training_type = self.get_model_training_type()
+                classifier.train_evaluate(model_arch, training_type)
+
+
+            elif model_building_step == "test":
+                classifier.test(model_arch)
+
+            print()
+            print()
+            print()
+            print()
+            to_continue = input("Continue Training/Testing? (y/n): ")
+            if to_continue.lower()=="n" or to_continue.lower()=="no":
+                break
 
 
     #allows user to modify hyperparameters 
@@ -292,7 +245,103 @@ class Main:
 
     #View Train/Test results
     def view_results(self):
+        print("-- To be implemented later --")
         pass
+
+
+
+    def initialize_classifier(self):
+        print("Classification type: ")
+        print("1) Binary (Predicting positive or negative)")
+        print("2) Segmentation (Predicting segments)")
+        print("0) Quit")
+
+        classifier_choice = int(input("Choice: "))
+
+        if classifier_choice == 1:
+            classifier = BinaryClassifier("chest_radiograph")
+            classifier_type = "binary"
+        elif classifier_choice==2:
+            classifier = SegmentationClassifier("chest_radiograph")
+            classifier_type = "segmentation"
+        #user wants to quit
+        elif classifier_choice==0:
+            return None, ""
+        #user input invalid menu choice
+        else:
+            print("Improper classification type")
+            return None, ""
+
+        return classifier, classifier_type
+
+
+    def get_model_building_step(self):
+        print("Model building step: ")
+        print("1) Train")
+        print("2) Test")
+
+        choice = int(input("Choice: "))
+
+        step = ""
+        if choice==1:
+            step = "train"
+        elif choice==2:
+            step = "test"
+        else:
+            print("Improper model building step")
+            
+        return step
+
+
+    def get_model_architecture(self):
+        print("Model architecture: ")
+        print("1) CNN")
+        print("2) U-net")
+
+        model_arch_choice = int(input("Choice: "))
+
+        model_arch = ""
+        if model_arch_choice==1:
+            model_arch = "cnn"
+        elif model_arch_choice==2:
+            model_arch = "unet"
+        else:
+            print("Improper model architecture")
+            
+
+        return model_arch
+
+    #allows the user to modify hyperparameters json file
+    def user_modify_hyperparameters(self, classifier_type, model_arch):
+        print("Hyperparameters: ")
+        self.print_hyperparameters(classifier_type, model_arch)
+        
+
+        print()
+        choice = input("Modify? (y/n): ")
+
+        while choice.lower()=="y" or choice.lower()=="yes":
+            self.modify_hyperparameters(classifier_type, model_arch)
+
+            print()
+            print("New hyperparameters: ")
+            self.print_hyperparameters(classifier_type, model_arch)
+
+            print()
+            choice = input("Continue modification? (y/n): ")
+
+    def get_model_training_type(self):
+        print("Model training type: ")
+        print("1) Standard")
+        print("2) Resample Ensembling")
+        choice = int(input("Choice: "))
+
+        training_type = "regular"
+        if choice==2:
+            training_type = "resampling_ensemble"
+
+        return training_type
+
 
 
         

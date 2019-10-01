@@ -113,6 +113,14 @@ class DataHandler:
 
         return path
         
+    #returns list of dates that have training sessions under specified parameters
+    def get_training_session_dates(self, project="chest_radiograph", classification_type="binary", model_arch="cnn"):
+
+        path = self.training_session_dir+"/"+str(project.lower())+"/"+str(classification_type.lower())+"/"+str(model_arch.lower())
+
+        dates = os.listdir(path)
+
+        return dates
 
 
     #returns iso 8601 date format string of today

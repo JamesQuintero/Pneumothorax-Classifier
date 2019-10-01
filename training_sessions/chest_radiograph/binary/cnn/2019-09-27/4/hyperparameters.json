@@ -23,7 +23,7 @@
         },
         "unet": {
             "augmented": true,
-            "balanced": false,
+            "balanced": true,
             "batch_size": 10,
             "conv_activation": "selu",
             "dataset_size": 100,
@@ -72,7 +72,7 @@
             "dataset_size": 30,
             "depth": 3,
             "dropout": 0,
-            "epochs": 1,
+            "epochs": 5,
             "filter_size": 3,
             "last_layer_size": 1,
             "loss": "dice_coef_loss",

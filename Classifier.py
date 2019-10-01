@@ -15,6 +15,8 @@ import numpy as np
 # from sklearn.preprocessing import StandardScaler
 # from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import StratifiedKFold
+
 import keras
 from keras import backend as K
 from keras.layers import Input
@@ -492,7 +494,7 @@ class Classifier(ABC):
 
 
     #predicts on the dataset, and prints a confusion matrix of the results
-    def prediction_analysis(self, classifier, feature_dataset, full_label_dataset, batch_size=1):
+    def prediction_analysis(self, classifier, feature_dataset, full_label_dataset, batch_size=1, verbose=False):
 
         generator = self.create_data_generator(feature_dataset, full_label_dataset, 1, "test")
         preds = classifier.predict_generator(generator)
@@ -508,15 +510,11 @@ class Classifier(ABC):
 
 
 
-        return self.statistical_analysis(y_non_category, y_predict_non_category)
+        return self.statistical_analysis(y_non_category, y_predict_non_category, verbose)
 
 
     #Bagging
     def bagging(self):
-        pass
-
-    #K-fold cross validation
-    def cross_validation(self):
         pass
 
     """
@@ -524,6 +522,9 @@ class Classifier(ABC):
     then trains a model on each section and ensembles them together to hopefully have one better model that's more stable
     than each model together
     https://www.sciencedirect.com/science/article/pii/S0925231214007644
+
+    Used as an ensemble since a bunch of smaller models might be able to predict better than a large model. 
+
     """
     # *args are the important arguments for calling train
     def resampling_ensemble(self, n_splits = 0, **train_args):
@@ -553,13 +554,7 @@ class Classifier(ABC):
             start = section*section_size
             end = (section+1)*section_size
 
-            # print("Start: "+str(start))
-            # print("End: "+str(end))
-
             X_section = X[start:end]
-
-            # print(self)
-
 
             #trains on this section
             train_args['X'] = X_section
@@ -586,6 +581,51 @@ class Classifier(ABC):
 
 
         return classifiers, X_trains, X_validates, X_tests, Ys
+
+
+
+    """
+    takes a dataset, gets k_folds so that 0.8 of the dataset is for training, 0.2 is for testing, and this portion moves 
+    throughout the dataset so that by the end, each portion of the dataset got a chance to be the test portion. 
+    https://en.wikipedia.org/wiki/Cross-validation_(statistics)
+
+    Used to judge performance of a model arch on a dataset
+
+    """
+    def kfold_cross_validation(self, k_folds = 0, **train_args):
+
+        print("Train arguments: "+str(train_args))
+        dataset_size = train_args['dataset_size']
+        X = self.get_processed_image_paths(balanced=train_args['balanced'], max_num=dataset_size)
+        Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+
+        seed = 12345
+
+        kfold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=seed)
+
+        stats = []
+        for train, test in kfold.split(X, Y):
+          # # create model
+          #   model = Sequential()
+          #   model.add(Dense(12, input_dim=8, activation='relu'))
+          #   model.add(Dense(8, activation='relu'))
+          #   model.add(Dense(1, activation='sigmoid'))
+          #   # Compile model
+          #   model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+          #   # Fit the model
+          #   model.fit(X[train], Y[train], epochs=150, batch_size=10, verbose=0)
+
+
+
+            # # evaluate the model
+            # scores = model.evaluate(X[test], Y[test], verbose=0)
+            # print("%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+            # stats.append(scores[1] * 100)
+
+
+
+            pass
 
 
 
@@ -747,6 +787,7 @@ class Classifier(ABC):
 
 
     #performs predictions and subsequent statistic calculations on unofficial test dataset
+    @abstractmethod
     def test(self, model_arch="cnn", dataset_size=100):
         max_images = dataset_size
         X = self.get_processed_image_paths(dataset_type="test", balanced=False, max_num=max_images)
@@ -815,7 +856,7 @@ class BinaryClassifier(Classifier):
         classifier.add(Conv2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
         classifier.add(MaxPooling2D(pool_size = pool_size))
         # classifier.add(BatchNormalization(axis=3))
-        classifier.add(Dropout(dropout))
+        # classifier.add(Dropout(dropout))
 
 
         #adds hidden convolutional layers
@@ -823,7 +864,7 @@ class BinaryClassifier(Classifier):
             classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
             classifier.add(MaxPooling2D(pool_size = pool_size))
             # classifier.add(BatchNormalization(axis=3))
-            classifier.add(Dropout(dropout))
+            # classifier.add(Dropout(dropout))
 
 
 
@@ -1008,7 +1049,7 @@ class BinaryClassifier(Classifier):
         dense1 = Dense(units = last_layer_size, activation = dense_activation)(dense1)
 
         dense2 = Dense(units = 1, activation = output_activation)(dense1)
-        classifier.add(Dropout(0.25))
+        dense2 = Dropout(0.25)(dense2)
 
         
         model = Model(inputs=inputs, outputs=dense2)
@@ -1045,6 +1086,34 @@ class BinaryClassifier(Classifier):
 
     def train_evaluate(self, model_arch="cnn", training_type="regular"):
         super().train_evaluate(classification_type="binary", model_arch=model_arch, training_type=training_type)
+
+
+    def test(self, model_arch):
+
+        print()
+        print("You can find the model you want to test by specifying a date and training session number.")
+        print()
+        print("Training session dates available:")
+
+        training_session_dates = self.data_handler.get_training_session_dates(project=self.project, classification_type="binary", model_arch=model_arch)
+
+        for x in range(0, len(training_session_dates)):
+            date = training_session_dates[x]
+            #if today, print it special
+            if date == self.data_handler.get_today():
+                print("  "+str(x+1)+") "+str(training_session_dates[x])+" (today)")
+            else:
+                print("  "+str(x+1)+") "+str(training_session_dates[x]))
+        print()
+        date_index = int(input("Choice: "))
+
+        while date_index<0 or date_index>len(training_session_dates):
+            print("Incorrect choice, please choose a number in the list. ")
+            date_index = int(input("Choice: "))
+
+        print("Date chosen: "+str(training_session_dates[date_index-1]))
+
+        print(" -- To be implemented later --")
 
 
 
@@ -1365,50 +1434,37 @@ class SegmentationClassifier(Classifier):
         return confusion_matrices
 
     #trains segmentation with specified hyperparameters
-    def train(self, model_arch="unet"):
-        self.hyperparameters = self.data_handler.load_hyperparameters()
-
-        train_ratio = self.hyperparameters['segmentation'][model_arch]['train_ratio']
-        validation_ratio = self.hyperparameters['segmentation'][model_arch]['val_ratio']
-        batch_size = self.hyperparameters['segmentation'][model_arch]['batch_size']
-        epochs = self.hyperparameters['segmentation'][model_arch]['epochs']
-        balanced = self.hyperparameters['segmentation'][model_arch]['balanced']
-        dataset_size = self.hyperparameters['segmentation'][model_arch]['dataset_size']
-
-        params = {"model_arch": model_arch, 
-                    "dataset_size": dataset_size, 
-                    "balanced": balanced,
-                    "train_ratio": train_ratio,
-                    "val_ratio": validation_ratio, 
-                    "batch_size": batch_size, 
-                    "epochs": epochs}
-
-        classifier, X_train, X_validate, X_test, Y = super().train(**params)
+    def train_evaluate(self, model_arch="cnn", training_type="regular"):
+        super().train_evaluate(classification_type="segmentation", model_arch=model_arch, training_type=training_type)
 
 
 
-        #performs prediction on training portion
-        print("--Training prediction analysis--")
-        try:
-            training_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_train, full_label_dataset=Y, batch_size=batch_size)
-        except Exception as error:
-            print("Couldn't perform training prediction analysis.")
-            print(error)
-            training_prediction_analysis = []
+    def test(self, model_arch):
 
+        print()
+        print("You can find the model you want to test by specifying a date and training session number.")
+        print()
+        print("Training session dates available:")
 
-        #perform prediction on validation portion
-        print("--Validation prediction analysis--")
-        try:
-            validation_prediction_analysis = self.prediction_analysis(classifier=classifier, feature_dataset=X_validate, full_label_dataset=Y, batch_size=batch_size)
-        except Exception as error:
-            print("Couldn't perform validation prediction analysis.")
-            print(error)
-            validation_prediction_analysis = []
+        training_session_dates = self.data_handler.get_training_session_dates(project=self.project, classification_type="binary", model_arch=model_arch)
 
+        for x in range(0, len(training_session_dates)):
+            date = training_session_dates[x]
+            #if today, print it special
+            if date == self.data_handler.get_today():
+                print("  "+str(x+1)+") "+str(training_session_dates[x])+" (today)")
+            else:
+                print("  "+str(x+1)+") "+str(training_session_dates[x]))
+        print()
+        date_index = int(input("Choice: "))
 
+        while date_index<0 or date_index>len(training_session_dates):
+            print("Incorrect choice, please choose a number in the list. ")
+            date_index = int(input("Choice: "))
 
-        self.save_training_session("segmentation", classifier, model_arch, training_prediction_analysis, validation_prediction_analysis)
+        print("Date chosen: "+str(training_session_dates[date_index-1]))
+
+        print(" -- To be implemented later --")
 
 
 
