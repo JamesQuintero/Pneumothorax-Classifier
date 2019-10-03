@@ -1,0 +1,38 @@
+{
+    "agg_stats": {
+        "F1": 0.4,
+        "FN": 2.0,
+        "FNR": 0.5,
+        "FP": 4.0,
+        "FPR": 1,
+        "MCC": -0.5773502691896258,
+        "NPV": 0,
+        "ROC": -0.5,
+        "TN": 0.0,
+        "TP": 2.0,
+        "accuracy": 0.25,
+        "precision": 0.3333333333333333,
+        "sensitivity": 0.5,
+        "specificity": 0,
+        "total": 0.5
+    },
+    "all_stats": [
+        {
+            "F1": 0.4,
+            "FN": 2,
+            "FNR": 0.5,
+            "FP": 4,
+            "FPR": 1,
+            "MCC": -0.5773502691896258,
+            "NPV": 0,
+            "ROC": -0.5,
+            "TN": 0,
+            "TP": 2,
+            "accuracy": 0.25,
+            "precision": 0.3333333333333333,
+            "sensitivity": 0.5,
+            "specificity": 0,
+            "total": 0.5
+        }
+    ]
+}

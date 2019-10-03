@@ -1,6 +1,5 @@
 from DataHandler import DataHandler
 from ImagePreprocessor import *
-from mask_functions import rle2mask
 
 import sys
 import keras
@@ -106,11 +105,11 @@ class DataGenerator(keras.utils.Sequence):
                     else:
                         #if one mask
                         if len(masks)==1:
-                            Y_train[n] = np.expand_dims(rle2mask(masks[0], image_height, image_width), axis=2)
+                            Y_train[n] = np.expand_dims(self.data_handler.rle2mask(masks[0], image_height, image_width), axis=2)
                         else:
                             Y_train[n] = np.zeros((image_height, image_width, image_channels))
                             for mask in masks:
-                                Y_train[n] =  Y_train[n] + np.expand_dims(rle2mask(mask, image_height, image_width), axis=2)
+                                Y_train[n] =  Y_train[n] + np.expand_dims(self.data_handler.rle2mask(mask, image_height, image_width), axis=2)
 
 
             except KeyError as error:

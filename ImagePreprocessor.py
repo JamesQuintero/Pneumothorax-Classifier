@@ -43,7 +43,7 @@ class ImagePreprocessor(ABC):
 
     #normalized based off train data, then applies to validate and test data
     #returns 4-tuple of normalized train, validate, and test, and scaler object for saving
-    def normalize_data(self, train, validate, test, scaler_type="standard_scaler"):
+    def normalize_data(self, train, validate, test, scaler_type=None):
 
         #if normalizing to fit a distribution curve
         if scaler_type.lower() == "standard_scaler":

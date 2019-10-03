@@ -330,15 +330,20 @@ class Main:
             print()
             choice = input("Continue modification? (y/n): ")
 
+            
+
     def get_model_training_type(self):
         print("Model training type: ")
         print("1) Standard")
         print("2) Resample Ensembling")
+        print("3) K-fold cross validation")
         choice = int(input("Choice: "))
 
         training_type = "regular"
         if choice==2:
             training_type = "resampling_ensemble"
+        elif choice==3:
+            training_type = "kfold_cross_validation"
 
         return training_type
 

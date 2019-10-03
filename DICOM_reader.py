@@ -6,8 +6,6 @@ import pandas as pd #for reading data files
 import os
 import shutil
 
-from mask_functions import rle2mask
-
 from DataHandler import DataHandler
 
 
@@ -122,7 +120,7 @@ class DICOMReader:
                 print("Multiple masks")
                 #adds all masks to plot
                 for x in range(0, len(found_masks)):
-                    mask = rle2mask(found_masks[x][1], 1024, 1024).T
+                    mask = self.data_handler.rle2mask(found_masks[x][1], 1024, 1024).T
 
                 ax[q].set_title('See Marker')
                 ax[q].imshow(mask, alpha=0.3, cmap="Reds")
@@ -131,7 +129,7 @@ class DICOMReader:
             elif len(found_masks)==1 and found_masks[0][1] != '-1':
                 print("Single mask")
 
-                mask = rle2mask(found_masks[0][1], 1024, 1024).T
+                mask = self.data_handler.rle2mask(found_masks[0][1], 1024, 1024).T
                 ax[q].set_title('See Marker')
                 ax[q].imshow(mask, alpha=0.3, cmap="Reds")
 

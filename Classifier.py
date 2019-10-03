@@ -3,7 +3,6 @@ from DataHandler import DataHandler
 from ImagePreprocessor import *
 from DataGenerator import DataGenerator
 
-from mask_functions import rle2mask
 
 import sys
 import os
@@ -15,7 +14,7 @@ import numpy as np
 # from sklearn.preprocessing import StandardScaler
 # from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold
 
 import keras
 from keras import backend as K
@@ -27,6 +26,8 @@ from keras.models import Model
 from keras.models import load_model
 
 from keras.callbacks import EarlyStopping
+from keras.callbacks import ModelCheckpoint
+
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
@@ -513,9 +514,14 @@ class Classifier(ABC):
         return self.statistical_analysis(y_non_category, y_predict_non_category, verbose)
 
 
-    #Bagging
+    """
+    a resampling technique used to estimate statistics on a population by sampling a dataset with replacement.
+    https://machinelearningmastery.com/a-gentle-introduction-to-the-bootstrap-method/
+    """
     def bagging(self):
         pass
+
+
 
     """
     takes a dataset, splits into n_splits+1 sections, then split each of those into train and test sections, 
@@ -568,16 +574,15 @@ class Classifier(ABC):
             X_tests.append(X_test_section)
             Ys.append(Y_section)
 
-            #performs prediction analysis on results
-            prediction_analysis = self.prediction_analysis(classifier=classifier, 
-                                                        feature_dataset=X_validate_section, 
-                                                        full_label_dataset=Y_section, 
-                                                        batch_size=train_args['batch_size'])
-
-            results.append(prediction_analysis)
 
 
-        print("")
+            # #performs prediction analysis on results
+            # prediction_analysis = self.prediction_analysis(classifier=classifier, 
+            #                                             feature_dataset=X_validate_section, 
+            #                                             full_label_dataset=Y_section, 
+            #                                             batch_size=train_args['batch_size'])
+
+            # results.append(prediction_analysis)
 
 
         return classifiers, X_trains, X_validates, X_tests, Ys
@@ -594,39 +599,69 @@ class Classifier(ABC):
     """
     def kfold_cross_validation(self, k_folds = 0, **train_args):
 
+        if k_folds<2:
+            print("Error, K-folds must have at least 2 folds. Please change hyperparameters and try again. ")
+            return None, None, None, None, None
+
         print("Train arguments: "+str(train_args))
         dataset_size = train_args['dataset_size']
         X = self.get_processed_image_paths(balanced=train_args['balanced'], max_num=dataset_size)
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
 
+        print("Total Feature size: "+str(len(X)))
+
 
         seed = 12345
 
-        kfold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=seed)
-
-        stats = []
-        for train, test in kfold.split(X, Y):
-          # # create model
-          #   model = Sequential()
-          #   model.add(Dense(12, input_dim=8, activation='relu'))
-          #   model.add(Dense(8, activation='relu'))
-          #   model.add(Dense(1, activation='sigmoid'))
-          #   # Compile model
-          #   model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-          #   # Fit the model
-          #   model.fit(X[train], Y[train], epochs=150, batch_size=10, verbose=0)
+        #creates keras Kfold object
+        kfold = KFold(n_splits=k_folds, shuffle=True, random_state=seed)
 
 
+        classifiers = []
+        X_trains = []
+        X_validates = []
+        X_tests = []
+        Ys = []
+        results = []
+        fold_index = 1
+        for train_indices, test_indices in kfold.split(X):
+            print()
+            print("Split "+str(fold_index)+"/"+str(k_folds))
+            print("Split Train size: "+str(len(train_indices)))
+            print("Split Test size: "+str(len(test_indices)))
+
+            #converts train array into numpy array in order to split by list of indices, 
+            #then converts back to list to be compatible during train method
+            train_args['X'] = list(np.array(X)[train_indices])
+            train_args['Y'] = Y
+            
+
+            classifier, X_train, X_validate, X_test, Y_section = self.train(**train_args)
+
+            classifiers.append(classifier)
+            X_trains.append(X_train)
+            X_validates.append(X_validate)
+            X_tests.append(X_test)
+            Ys.append(Y_section)
+
+
+            # #performs prediction analysis on results
+            # prediction_analysis = self.prediction_analysis(classifier=classifier, 
+            #                                             feature_dataset=X_validate_section, 
+            #                                             full_label_dataset=Y, 
+            #                                             batch_size=train_args['batch_size'])
 
             # # evaluate the model
             # scores = model.evaluate(X[test], Y[test], verbose=0)
             # print("%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
             # stats.append(scores[1] * 100)
 
+            fold_index += 1
 
 
-            pass
 
+            
+        return classifiers, X_trains, X_validates, X_tests, Ys
 
 
 
@@ -650,7 +685,7 @@ class Classifier(ABC):
         print("X_train size: "+str(len(X_train)))
         print("X_validate size: "+str(len(X_validate)))
 
-
+        #creates the proper specified architecture
         if model_arch.lower() == "cnn": 
             classifier = self.create_CNN()  
         elif model_arch.lower() == "unet":
@@ -662,20 +697,28 @@ class Classifier(ABC):
 
         training_generator = self.create_data_generator(X_train, Y, batch_size, "train")
 
+        best_model_path = "./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5"
+
         # patient early stopping
         early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3)
+        model_checkpoint = ModelCheckpoint(best_model_path, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=1)
 
         # fits the model on batches with real-time data augmentation:
         classifier.fit_generator(generator=training_generator,
                                 steps_per_epoch=len(X_train) / batch_size,
                                 epochs=epochs,
                                 validation_data=self.create_data_generator(X_validate, Y, batch_size, "test"), 
-                                callbacks = [early_stopping])
+                                callbacks = [early_stopping, model_checkpoint])
+
+        #loads the best model
+        classifier = load_model(best_model_path)
 
 
-        classifier.save("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5")
+        # classifier.save(best_model_path)
 
         return classifier, X_train, X_validate, X_test, Y
+
+
 
 
     #trains binary classifier with specified hyperparameters, then evaluates the results and saves to disk
@@ -691,6 +734,7 @@ class Classifier(ABC):
         dataset_size = self.hyperparameters[classification_type][model_arch]['dataset_size']
         balanced = self.hyperparameters[classification_type][model_arch]['balanced']
         n_splits = self.hyperparameters[classification_type][model_arch]['resampling_ensemble_n_splits']
+        k_folds = self.hyperparameters[classification_type][model_arch]['kfold_cross_validation_k_folds']
 
         params = {"model_arch": model_arch, 
                     "dataset_size": dataset_size, 
@@ -707,6 +751,13 @@ class Classifier(ABC):
             classifiers, X_trains, X_validates, X_tests, Ys = self.resampling_ensemble(n_splits = 0, **params)
         elif training_type == "resampling_ensemble":
             classifiers, X_trains, X_validates, X_tests, Ys = self.resampling_ensemble(n_splits = n_splits, **params)
+        elif training_type == "kfold_cross_validation":
+            classifiers, X_trains, X_validates, X_tests, Ys = self.kfold_cross_validation(k_folds = k_folds, **params)
+
+
+        if classifiers==None:
+            print("Something went wrong in train_evaluate()")
+            return
 
 
 
@@ -718,6 +769,7 @@ class Classifier(ABC):
 
 
         #performs prediction on training portion
+        print()
         print("--Training prediction analysis--")
         training_prediction_analysis = []
         try:
@@ -729,6 +781,7 @@ class Classifier(ABC):
 
 
         #perform prediction on validation portion
+        print()
         print("--Validation prediction analysis--")
         validation_prediction_analysis = []
         try:
@@ -766,9 +819,22 @@ class Classifier(ABC):
         #saves models
         try:
             for x in range(0, len(classifiers)):
-                classifiers[x].save(session_dir+"/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model_"+str(x+1)+"_of_"+str(len(classifiers))+".h5")
+                classifiers[x].save(session_dir+"/"+str(self.get_model_arch_filename_prefix(model_arch))+"_"+str(training_type)+"_model_"+str(x+1)+"_of_"+str(len(classifiers))+".h5")
         except Exception as error:
             print("Error, couldn't save model: "+str(error))
+
+        #saves model training history
+        try:
+            for x in range(0, len(classifiers)):
+                accuracy_history = classifiers[x].history['acc']
+                val_accuracy_history = classifiers[x].history['val_acc']
+                loss_history = classifiers[x].history['loss']
+                val_loss_history = classifiers[x].history['val_loss']
+
+                print("accuracy history: "+str(accuracy_history))
+                print("Loss history: "+str(loss_history))
+        except Exception as error:
+            print("Error, couldn't get model training stats history")
 
         #saves hyperparameters
         new_hyperparameter_path = session_dir+"/hyperparameters.json"
@@ -784,6 +850,8 @@ class Classifier(ABC):
         for x in range(0, len(validation_analysis)):
             to_save = {'all_stats': validation_analysis[x][0], 'agg_stats': validation_analysis[x][1]}
             self.data_handler.save_to_json(session_dir+"/validation_stats_"+str(x+1)+"_of_"+str(len(training_analysis))+".json", to_save)
+
+
 
 
     #performs predictions and subsequent statistic calculations on unofficial test dataset
@@ -820,10 +888,6 @@ Handles binary classification training, validation, and testing
 class BinaryClassifier(Classifier):
     def __init__(self, project):
         super().__init__(project)
-
-
-    def print_something(self):
-        print("Something")
 
     #creates CNN sculpted for binary classification
     def create_CNN(self):
@@ -880,6 +944,7 @@ class BinaryClassifier(Classifier):
         classifier.compile(optimizer = optimizer, loss = loss, metrics = ['accuracy'])
         # classifier.compile(optimizer = 'adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
 
+        print("Creating CNN")
         classifier.summary()
 
         return classifier
@@ -1057,6 +1122,7 @@ class BinaryClassifier(Classifier):
         # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
         model.compile(optimizer=optimizer, loss=loss, metrics=["accuracy"])
 
+        print("Creating u-net")
         model.summary()
 
         return model
@@ -1229,6 +1295,7 @@ class SegmentationClassifier(Classifier):
 
         model.compile(optimizer=optimizer, loss=loss, metrics=[self.dice_coef])
 
+        print("Creating CNN")
         model.summary()
 
         return model
@@ -1397,6 +1464,7 @@ class SegmentationClassifier(Classifier):
 
         model.compile(optimizer=optimizer, loss=loss, metrics=[self.dice_coef])
 
+        print("Creating u-net")
         model.summary()
 
         return model
