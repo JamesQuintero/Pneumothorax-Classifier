@@ -664,6 +664,7 @@ class Classifier(ABC):
             train_args['Y'] = Y
             
 
+            #Be careful of using easly stopping while performing k-fold cross validation
             classifier, X_train, X_validate, X_test, Y_section = self.train(**train_args)
 
             classifiers.append(classifier)
@@ -729,14 +730,15 @@ class Classifier(ABC):
 
         # patient early stopping
         early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3)
-        model_checkpoint = ModelCheckpoint(best_model_path, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=1)
+        model_checkpoint = ModelCheckpoint(best_model_path, monitor='val_loss', mode='min', save_best_only=True, save_weights_only=False, period=1, verbose=0)
+        callback_list = [early_stopping, model_checkpoint]
 
         # fits the model on batches with real-time data augmentation:
         classifier.fit_generator(generator=training_generator,
                                 steps_per_epoch=len(X_train) / batch_size,
                                 epochs=epochs,
                                 validation_data=self.create_data_generator(X_validate, Y, batch_size, "test"), 
-                                callbacks = [early_stopping, model_checkpoint])
+                                callbacks = callback_list)
 
         #loads the best model
         classifier = load_model(best_model_path)
@@ -933,6 +935,7 @@ class BinaryClassifier(Classifier):
         weight_regularization = self.hyperparameters['binary']['cnn']['weight_regularization']
         activation_regularization = self.hyperparameters['binary']['cnn']['activation_regularization']
         weight_limit = self.hyperparameters['binary']['cnn']['weight_limit']
+        noise_amount = self.hyperparameters['binary']['cnn']['noise_std']
 
         if loss=="dice_coef_loss":
             loss = self.dice_coef_loss
@@ -961,6 +964,7 @@ class BinaryClassifier(Classifier):
             classifier.add(BatchNormalization())
 
         classifier.add(MaxPooling2D(pool_size = pool_size))
+        classifier.add(GaussianNoise(noise_amount)) #Adds noise
 
         #add dropout if not using batch normalization
         if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
@@ -980,6 +984,9 @@ class BinaryClassifier(Classifier):
                 classifier.add(BatchNormalization())
 
             classifier.add(MaxPooling2D(pool_size = pool_size))
+
+            if self.hyperparameters['binary']['cnn']['noise_in_hidden_layer']==True:
+                classifier.add(GaussianNoise(noise_amount)) #Adds noise
 
             #add dropout if not using batch normalization
             if self.hyperparameters['binary']['cnn']['batch_normalization']==False:

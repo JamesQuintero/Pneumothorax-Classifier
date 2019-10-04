@@ -1,7 +1,7 @@
 {
     "binary": {
         "cnn": {
-            "activation_regularization": 0.0,
+            "activation_regularization": 0.001,
             "augmented": true,
             "balanced": true,
             "batch_normalization": false,
@@ -15,9 +15,9 @@
             "filter_size": 3,
             "kfold_cross_validation_k_folds": 5,
             "last_layer_size": 128,
-            "loss": "mean_squared_error",
+            "loss": "binary_crossentropy",
             "noise_in_hidden_layer": false,
-            "noise_std": 0.0,
+            "noise_std": 0.01,
             "num_conv_layers": 4,
             "optimizer": "adam",
             "output_activation": "sigmoid",
