@@ -18,15 +18,26 @@ from sklearn.model_selection import KFold
 
 import keras
 from keras import backend as K
+
+#Layers
 from keras.layers import Input
 from keras.layers import *
 
+#Models
 from keras.models import Sequential
 from keras.models import Model
 from keras.models import load_model
 
+#Callback methods
 from keras.callbacks import EarlyStopping
 from keras.callbacks import ModelCheckpoint
+
+#Regularizers
+from keras.regularizers import l2
+from keras.regularizers import l1
+
+#constraints
+from keras.constraints import max_norm
 
 from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
@@ -522,6 +533,23 @@ class Classifier(ABC):
         pass
 
 
+    """
+    Uses a pre-trained model on similar radiographs or data, and uses it as a starting point for this model. 
+    This allows for features already learned to be a starting point, and for hidden layer weights to be the initial weights. 
+    Transfer learning benefits by having much better generalization, meaning less standard deviation, and higher accuracy overall. 
+    """
+    def transfer_learning(self):
+        pass
+
+
+    """
+    Iterates through many combinations of hyperparameters and returns the best performing model along with its hyperparameters
+    Used to determine best hyperparameters instead of manually manipulating them yourself
+    """
+    def grid_search(self):
+        pass
+
+
 
     """
     takes a dataset, splits into n_splits+1 sections, then split each of those into train and test sections, 
@@ -902,6 +930,9 @@ class BinaryClassifier(Classifier):
         optimizer = self.hyperparameters['binary']['cnn']['optimizer']
         last_layer_size = self.hyperparameters['binary']['cnn']['last_layer_size']
         dropout = self.hyperparameters['binary']['cnn']['dropout']
+        weight_regularization = self.hyperparameters['binary']['cnn']['weight_regularization']
+        activation_regularization = self.hyperparameters['binary']['cnn']['activation_regularization']
+        weight_limit = self.hyperparameters['binary']['cnn']['weight_limit']
 
         if loss=="dice_coef_loss":
             loss = self.dice_coef_loss
@@ -917,18 +948,42 @@ class BinaryClassifier(Classifier):
         #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
 
 
-        classifier.add(Conv2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
+        classifier.add(Conv2D(CNN_size, filter_size, 
+                            input_shape = (self.image_width, self.image_height, 1), 
+                            padding="same", 
+                            kernel_initializer='he_uniform', #Initializes weights
+                            kernel_regularizer=l2(weight_regularization), #regularizes weights to avoid overfitting
+                            activity_regularizer=l1(activation_regularization), #regularizes activation to avoid overfitting
+                            kernel_constraint=max_norm(weight_limit))) #constrains weights to avoid exploding gradients
+        classifier.add(Activation(CNN_activation))
+
+        if self.hyperparameters['binary']['cnn']['batch_normalization']==True:
+            classifier.add(BatchNormalization())
+
         classifier.add(MaxPooling2D(pool_size = pool_size))
-        # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(dropout))
+
+        #add dropout if not using batch normalization
+        if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
+            classifier.add(Dropout(dropout))
 
 
         #adds hidden convolutional layers
         for x in range(1, num_conv_layers):
-            classifier.add(Conv2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+            classifier.add(Conv2D(CNN_size, filter_size, 
+                                    padding="same", 
+                                    kernel_initializer='he_uniform', 
+                                    kernel_regularizer=l2(weight_regularization),
+                                    activity_regularizer=l1(activation_regularization),
+                                    kernel_constraint=max_norm(weight_limit)))
+            classifier.add(Activation(CNN_activation))
+            if self.hyperparameters['binary']['cnn']['batch_normalization']==True:
+                classifier.add(BatchNormalization())
+
             classifier.add(MaxPooling2D(pool_size = pool_size))
-            # classifier.add(BatchNormalization(axis=3))
-            # classifier.add(Dropout(dropout))
+
+            #add dropout if not using batch normalization
+            if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
+                classifier.add(Dropout(dropout))
 
 
 
@@ -937,7 +992,8 @@ class BinaryClassifier(Classifier):
 
         #128 is an arbitrary number that can be decreased to lower computation time, and increased for better accuracy
         classifier.add(Dense(units = last_layer_size, activation = dense_activation))
-        classifier.add(Dropout(dropout))
+        if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
+            classifier.add(Dropout(dropout))
 
         classifier.add(Dense(units = 1, activation = output_activation))
 

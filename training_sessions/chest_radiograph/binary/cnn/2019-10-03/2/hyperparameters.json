@@ -1,16 +1,15 @@
 {
     "binary": {
         "cnn": {
-            "activation_regularization": 0.001,
             "augmented": true,
             "balanced": true,
             "batch_normalization": true,
-            "batch_size": 5,
+            "batch_size": 10,
             "conv_activation": "selu",
             "conv_layer_size": 32,
-            "dataset_size": 300,
+            "dataset_size": 50,
             "dense_activation": "selu",
-            "dropout": 0.0,
+            "dropout": 0.25,
             "epochs": 10,
             "filter_size": 3,
             "kfold_cross_validation_k_folds": 5,
@@ -22,12 +21,9 @@
             "pool_size": 3,
             "resampling_ensemble_n_splits": 0,
             "train_ratio": 0.7,
-            "val_ratio": 0.2,
-            "weight_limit": 2,
-            "weight_regularization": 0.001
+            "val_ratio": 0.2
         },
         "unet": {
-            "activation_regularization": 0.001,
             "augmented": true,
             "balanced": false,
             "batch_normalization": false,
@@ -48,14 +44,11 @@
             "resampling_ensemble_n_splits": 0,
             "start_size": 16,
             "train_ratio": 0.7,
-            "val_ratio": 0.2,
-            "weight_limit": 3,
-            "weight_regularization": 0.01
+            "val_ratio": 0.2
         }
     },
     "segmentation": {
         "cnn": {
-            "activation_regularization": 0.001,
             "augmented": false,
             "balanced": true,
             "batch_normalization": true,
@@ -75,12 +68,9 @@
             "pool_size": 3,
             "resampling_ensemble_n_splits": 0,
             "train_ratio": 0.7,
-            "val_ratio": 0.2,
-            "weight_limit": 3,
-            "weight_regularization": 0.01
+            "val_ratio": 0.2
         },
         "unet": {
-            "activation_regularization": 0.001,
             "augmented": false,
             "balanced": true,
             "batch_normalization": false,
@@ -100,9 +90,7 @@
             "resampling_ensemble_n_splits": 0,
             "start_size": 16,
             "train_ratio": 0.7,
-            "val_ratio": 0.2,
-            "weight_limit": 3,
-            "weight_regularization": 0.01
+            "val_ratio": 0.2
         }
     }
 }
