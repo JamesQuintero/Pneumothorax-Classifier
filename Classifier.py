@@ -521,7 +521,7 @@ class Classifier(ABC):
     def prediction_analysis(self, classifier, feature_dataset, full_label_dataset, batch_size=1, verbose=False):
 
         generator = self.create_data_generator(feature_dataset, full_label_dataset, 1, "test")
-        preds = classifier.predict_generator(generator)
+        preds = classifier.predict_generator(generator, steps=len(feature_dataset))
 
 
         print("predictions: "+str(preds.shape))
@@ -576,7 +576,7 @@ class Classifier(ABC):
         predictions = []
         for model in models:
             generator = self.create_data_generator(X_test, [], 1, "test")
-            preds = model.predict_generator(generator)
+            preds = model.predict_generator(generator, steps=len(X_test))
             predictions.append(preds)
 
         predictions = np.array(predictions)
@@ -621,12 +621,20 @@ class Classifier(ABC):
     def evaluate_ensemble(self, models, weights, X_validate, y_validate):
         predictions = self.ensemble_predictions(models, weights, X_validate)
 
+        y_validate = np.array(y_validate)
+        predictions = np.array(predictions)
+
+        # print(y_validate.shape)
+        # print(predictions.shape)
+
 
         #self.prediction_analysis?
 
 
         #determines accuracy of the predictions
-        return accuracy_score(y_validate, predictions)
+        accuracy = accuracy_score(y_validate, predictions)
+        # print("Accuracy: "+str(accuracy))
+        return accuracy
 
 
     """
@@ -900,7 +908,8 @@ class Classifier(ABC):
         classifier.fit_generator(generator=training_generator,
                                 steps_per_epoch=len(X_train) / batch_size,
                                 epochs=epochs,
-                                validation_data=self.create_data_generator(X_validate, Y, batch_size, "test"), 
+                                validation_data=self.create_data_generator(X_validate, Y, batch_size, "test"),
+                                validation_steps=len(X_validate), 
                                 callbacks = callback_list)
 
         #loads the best model
