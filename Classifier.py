@@ -520,11 +520,14 @@ class Classifier(ABC):
     #predicts on the dataset, and prints a confusion matrix of the results
     def prediction_analysis(self, classifier, feature_dataset, full_label_dataset, batch_size=1, verbose=False):
 
-        generator = self.create_data_generator(feature_dataset, full_label_dataset, 1, "test")
-        preds = classifier.predict_generator(generator, steps=len(feature_dataset))
+        generator = self.create_data_generator(feature_dataset, full_label_dataset, len(feature_dataset), "test")
+        preds = classifier.predict_generator(generator, steps=1)
 
-
-        print("predictions: "+str(preds.shape))
+        try:
+            print("Feature dataset: "+str(feature_dataset.shape))
+            print("predictions: "+str(preds.shape))
+        except Exception as ex:
+            pass
 
 
         #gets actual labels
@@ -581,11 +584,20 @@ class Classifier(ABC):
 
         predictions = np.array(predictions)
 
+        # print("Predictions: "+str(predictions))
+        # print("Weights to multiply by: "+str(weights))
+
         # weighted sum of all predictions
         summed = np.tensordot(predictions, weights, axes=((0),(0)))
 
+        # print("Summsed: "+str(summed))
+
         # argmax across classes
-        result = np.argmax(summed, axis=1)
+        # result = np.argmax(summed, axis=1)
+        # result = summed/len(models)
+        result = summed
+
+        # print("result: "+str(result))
         
         return result
 
@@ -621,19 +633,27 @@ class Classifier(ABC):
     def evaluate_ensemble(self, models, weights, X_validate, y_validate):
         predictions = self.ensemble_predictions(models, weights, X_validate)
 
-        y_validate = np.array(y_validate)
+        y_validate = np.array(y_validate.copy())
         predictions = np.array(predictions)
 
         # print(y_validate.shape)
         # print(predictions.shape)
 
+        # print("Actual results: "+str(y_validate))
+
+        # print("Weights: "+str(weights))
+
 
         #self.prediction_analysis?
 
+        #converts to binary
+        predictions = [ t>0.5 for t in predictions]
+        # print("Binary predictions: "+str(predictions))
 
         #determines accuracy of the predictions
         accuracy = accuracy_score(y_validate, predictions)
-        # print("Accuracy: "+str(accuracy))
+        print("Weights: "+str(weights)+" | Accuracy: "+str(accuracy))
+        # print()
         return accuracy
 
 
@@ -672,7 +692,7 @@ class Classifier(ABC):
             Ys.append(Y_section)
 
             #gets output validation data
-            generator = self.create_data_generator(X_validate_section, Y, 1, "test")
+            generator = self.create_data_generator(X_validate_section, Y, len(X_validate_section), "test")
             X_images, y_non_category = generator.get_processed_images(start=0, end=len(X_validate_section))
             Y_validates.append(y_non_category)
 
