@@ -1,3 +1,8 @@
+"""
+James Quintero
+Created: 2019
+"""
+
 #scripts to use
 import os
 
@@ -337,6 +342,7 @@ class Main:
         print("1) Standard")
         print("2) Resample Ensembling")
         print("3) K-fold cross validation")
+        print("4) Model averaging")
         choice = int(input("Choice: "))
 
         training_type = "regular"
@@ -344,6 +350,8 @@ class Main:
             training_type = "resampling_ensemble"
         elif choice==3:
             training_type = "kfold_cross_validation"
+        elif choice==4:
+            training_type = "weighted_model_averaging"
 
         return training_type
 

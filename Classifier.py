@@ -1,3 +1,10 @@
+"""
+James Quintero
+Created: 2019
+"""
+
+
+#Local files
 from DICOM_reader import DICOMReader
 from DataHandler import DataHandler
 from ImagePreprocessor import *
@@ -8,13 +15,19 @@ import sys
 import os
 import random
 import json
+import scipy
+import imageio
 
 #ML libraries
 import numpy as np
-# from sklearn.preprocessing import StandardScaler
-# from sklearn.preprocessing import MinMaxScaler
+
+#Sklearn
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold
+
+#Scipy
+from scipy.optimize import differential_evolution
 
 import keras
 from keras import backend as K
@@ -43,7 +56,6 @@ from keras.utils import np_utils
 from keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import Adam
 
-import imageio
 
 #For my windows machine
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -547,8 +559,159 @@ class Classifier(ABC):
     Used to determine best hyperparameters instead of manually manipulating them yourself
     """
     def grid_search(self):
-        pass
+        hyperparameters = {}
 
+
+    """
+    Ensemble prediction for multi-class classification
+    Returns weighted predicted determined by the weight of the model making those predictions
+    params: 
+        models are a list of keras models
+        weights are a 2D list of lists of weights
+        X_test is a single test dataset
+    """
+    def ensemble_predictions(self, models, weights, X_test):
+
+        # make predictions
+        predictions = []
+        for model in models:
+            generator = self.create_data_generator(X_test, [], 1, "test")
+            preds = model.predict_generator(generator)
+            predictions.append(preds)
+
+        predictions = np.array(predictions)
+
+        # weighted sum of all predictions
+        summed = np.tensordot(predictions, weights, axes=((0),(0)))
+
+        # argmax across classes
+        result = np.argmax(summed, axis=1)
+        
+        return result
+
+
+    """
+    Loss function for optimization process, designed to be minimized
+    Should be used in differential evolution algorithm
+    """
+    def weighted_averaging_loss_function(self, weights, models, X_test, Y_test):
+        # normalize weights
+        normalized_weights = self.normalize(weights)
+        # calculate error rate
+        error_rate = 1.0 - self.evaluate_ensemble(models, normalized_weights, X_test, Y_test)
+        return error_rate
+
+
+    # normalize a vector to have unit norm
+    def normalize(self, weights):
+        #calculate l1 vector norm
+        result = np.linalg.norm(weights, 1)
+
+        #prevents division by zero
+        if result == 0.0:
+            return weights
+
+        #returns normalized vector
+        return weights / result
+
+
+    """
+    Evaluates a specific number of models in a weighted ensemble
+    """
+    def evaluate_ensemble(self, models, weights, X_validate, y_validate):
+        predictions = self.ensemble_predictions(models, weights, X_validate)
+
+
+        #self.prediction_analysis?
+
+
+        #determines accuracy of the predictions
+        return accuracy_score(y_validate, predictions)
+
+
+    """
+    Incorporates the technique of model-averaging ensembling, which is the process of training multiple of the same neural networks on the same training set, 
+    then averaging their predictions. 
+    This ensembling method can also be weighted, where different models have different weights depending on their performing on a validation dataset
+    """
+    def weighted_model_averaging(self, num_models = 1, **train_args):
+        print("Train arguments: "+str(train_args))
+        dataset_size = train_args['dataset_size']
+        X = self.get_processed_image_paths(balanced=train_args['balanced'], max_num=dataset_size)
+        Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+        print("Dataset size: "+str(dataset_size))
+        print("num models: "+str(num_models))
+        print()
+
+
+        classifiers = []
+        X_trains = []
+        X_validates = []
+        X_tests = []
+        Ys = []
+        Y_validates = []
+        results = []
+        for section in range(0, num_models):
+            train_args['X'] = X
+            train_args['Y'] = Y
+
+            classifier, X_train_section, X_validate_section, X_test_section, Y_section = self.train(**train_args)
+            classifiers.append(classifier)
+            X_trains.append(X_train_section)
+            X_validates.append(X_validate_section)
+            X_tests.append(X_test_section)
+            Ys.append(Y_section)
+
+            #gets output validation data
+            generator = self.create_data_generator(X_validate_section, Y, 1, "test")
+            X_images, y_non_category = generator.get_processed_images(start=0, end=len(X_validate_section))
+            Y_validates.append(y_non_category)
+
+            print("Len X_Validate: "+str(len(X_validate_section)))
+            print("Len Y_validate: "+str(len(y_non_category)))
+            print()
+
+
+        print("-- Start Weight Optimization --")
+
+
+
+        #averaging ensemble (equal weights)
+        initial_weights = [1.0/num_models for weight in range(num_models)]
+        score = self.evaluate_ensemble(classifiers, initial_weights, X_validates[0], Y_validates[0])
+        print('Equal Weights Score: %.3f' % score)
+
+
+
+        # define bounds on each weight
+        weight_bounds = [(0.0, 1.0) for model in range(num_models)]
+        # arguments to the loss function
+        search_arg = (classifiers, X_validates[0], Y_validates[0])
+
+        #Performs an optimization function in regards to the provided loss function to get optimal weights
+        print("Performing Differential Evolution to calculate optimal weights")
+        result = differential_evolution(func = self.weighted_averaging_loss_function, 
+                                        bounds = weight_bounds, 
+                                        args = search_arg, 
+                                        maxiter = 10, #standard could be 1000
+                                        tol = 1e-7,
+                                        disp=True)
+
+        # get the chosen weights
+        weights = self.normalize(result['x'])
+        print('Optimized Weights: %s' % weights)
+
+
+        # evaluate chosen weights
+        score = self.evaluate_ensemble(classifiers, weights, X_validates[0], Y_validates[0])
+        print('Optimized Weights Score: %.3f' % score)
+
+        print("-- End of Weight Optimization --")
+
+
+
+        return classifiers, X_trains, X_validates, X_tests, Ys
 
 
     """
@@ -628,7 +791,7 @@ class Classifier(ABC):
     def kfold_cross_validation(self, k_folds = 0, **train_args):
 
         if k_folds<2:
-            print("Error, K-folds must have at least 2 folds. Please change hyperparameters and try again. ")
+            print("Error, K-folds must have at least 2 folds. Please change hyperparameters and reflect that. ")
             return None, None, None, None, None
 
         print("Train arguments: "+str(train_args))
@@ -765,6 +928,7 @@ class Classifier(ABC):
         balanced = self.hyperparameters[classification_type][model_arch]['balanced']
         n_splits = self.hyperparameters[classification_type][model_arch]['resampling_ensemble_n_splits']
         k_folds = self.hyperparameters[classification_type][model_arch]['kfold_cross_validation_k_folds']
+        num_models = self.hyperparameters[classification_type][model_arch]['weighted_avg_ensemble_num_models']
 
         params = {"model_arch": model_arch, 
                     "dataset_size": dataset_size, 
@@ -783,6 +947,10 @@ class Classifier(ABC):
             classifiers, X_trains, X_validates, X_tests, Ys = self.resampling_ensemble(n_splits = n_splits, **params)
         elif training_type == "kfold_cross_validation":
             classifiers, X_trains, X_validates, X_tests, Ys = self.kfold_cross_validation(k_folds = k_folds, **params)
+        elif training_type == "weighted_model_averaging":
+            classifiers, X_trains, X_validates, X_tests, Ys = self.weighted_model_averaging(num_models = num_models, **params)
+        else:
+            classifiers, X_trains, X_validates, X_tests, Ys = None
 
 
         if classifiers==None:
@@ -1024,6 +1192,7 @@ class BinaryClassifier(Classifier):
         loss = self.hyperparameters['binary']['unet']['loss']
         optimizer = self.hyperparameters['binary']['unet']['optimizer']
         last_layer_size = self.hyperparameters['binary']['unet']['last_layer_size']
+        batch_normalization = self.hyperparameters['binary']['unet']['batch_normalization']
 
         if loss=="dice_coef_loss":
             loss = self.dice_coef_loss
@@ -1137,17 +1306,20 @@ class BinaryClassifier(Classifier):
         inputs = Input((self.image_width, self.image_height, 1))
         conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(inputs)
         conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv1)
-        conv1 = BatchNormalization()(conv1)
+        if batch_normalization:
+            conv1 = BatchNormalization()(conv1)
         pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
 
         conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(pool1)
         conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv2)
-        conv2 = BatchNormalization()(conv2)
+        if batch_normalization:
+            conv2 = BatchNormalization()(conv2)
         pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
 
         conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
         conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
-        conv3 = BatchNormalization()(conv3)
+        if batch_normalization:
+            conv3 = BatchNormalization()(conv3)
         # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
 
         # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
@@ -1160,12 +1332,14 @@ class BinaryClassifier(Classifier):
         up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
         conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
         conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv8)
-        conv8 = BatchNormalization()(conv8)
+        if batch_normalization:
+            conv8 = BatchNormalization()(conv8)
 
         up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=3)
         conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(up9)
         conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
-        conv9 = BatchNormalization()(conv9)
+        if batch_normalization:
+            conv9 = BatchNormalization()(conv9)
 
         # conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
 

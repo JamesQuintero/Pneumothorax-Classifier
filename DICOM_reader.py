@@ -1,3 +1,8 @@
+"""
+James Quintero
+Created: 2019
+"""
+
 import glob #for loading DICOM files from disk
 import pydicom #for reading DICOM files
 from pydicom.encaps import encapsulate

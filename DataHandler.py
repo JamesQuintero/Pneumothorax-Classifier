@@ -1,3 +1,7 @@
+"""
+James Quintero
+Created: 2019
+"""
 
 import os
 import pandas as pd #for reading data files

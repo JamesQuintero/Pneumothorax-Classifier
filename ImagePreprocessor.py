@@ -1,3 +1,9 @@
+"""
+James Quintero
+Created: 2019
+"""
+
+
 from DICOM_reader import DICOMReader
 from DataHandler import DataHandler
 

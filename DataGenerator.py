@@ -1,3 +1,8 @@
+"""
+James Quintero
+Created: 2019
+"""
+
 from DataHandler import DataHandler
 from ImagePreprocessor import *
 
