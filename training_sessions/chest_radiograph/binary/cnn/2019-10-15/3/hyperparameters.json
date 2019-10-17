@@ -3,16 +3,15 @@
         "cnn": {
             "activation_regularization": 0.0,
             "augmented": true,
-            "bagging_num_models": 5,
             "balanced": true,
             "batch_normalization": false,
             "batch_size": 5,
             "conv_activation": "relu",
             "conv_layer_size": 16,
-            "dataset_size": 50,
+            "dataset_size": 100,
             "dense_activation": "relu",
             "dropout": 0.25,
-            "epochs": 3,
+            "epochs": 5,
             "filter_size": 3,
             "kfold_cross_validation_k_folds": 5,
             "last_layer_size": 128,
@@ -28,12 +27,11 @@
             "val_ratio": 0.2,
             "weight_limit": 2,
             "weight_regularization": 0.001,
-            "weighted_avg_ensemble_num_models": 3
+            "weighted_avg_ensemble_num_models": 5
         },
         "unet": {
             "activation_regularization": 0.001,
             "augmented": true,
-            "bagging_num_models": 5,
             "balanced": false,
             "batch_normalization": false,
             "batch_size": 10,
@@ -65,7 +63,6 @@
         "cnn": {
             "activation_regularization": 0.001,
             "augmented": false,
-            "bagging_num_models": 5,
             "balanced": true,
             "batch_normalization": true,
             "batch_size": 10,
@@ -94,7 +91,6 @@
         "unet": {
             "activation_regularization": 0.001,
             "augmented": false,
-            "bagging_num_models": 5,
             "balanced": true,
             "batch_normalization": false,
             "batch_size": 10,

@@ -25,6 +25,7 @@ import numpy as np
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold
+from sklearn.utils import resample
 
 #Scipy
 from scipy.optimize import differential_evolution
@@ -541,11 +542,69 @@ class Classifier(ABC):
 
 
     """
-    a resampling technique used to estimate statistics on a population by sampling a dataset with replacement.
+    A resampling technique used to estimate statistics on a population by sampling a dataset with replacement.
+    Also known as Bootstrapping or Bootstrap Aggregation
+    Can keep adding ensemble members since bagging does not overfit
     https://machinelearningmastery.com/a-gentle-introduction-to-the-bootstrap-method/
     """
-    def bagging(self):
-        pass
+    def bagging(self, num_models = 1, **train_args):
+        print("Train arguments: "+str(train_args))
+        dataset_size = train_args['dataset_size']
+        X = self.get_processed_image_paths(balanced=train_args['balanced'], max_num=dataset_size)
+        Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+        print("Dataset size: "+str(dataset_size))
+        print("num models: "+str(num_models))
+        print()
+
+
+        #list of indices running the length of X
+        indices = [i for i in range(len(X))]
+
+
+        classifiers = []
+        X_trains = []
+        X_validates = []
+        X_tests = []
+        Ys = []
+        Y_validates = []
+        results = []
+        for section in range(0, num_models):
+
+            ## Performes the resampling with replacement ##
+            train_indices = resample(indices, replace=True, n_samples=int(len(indices)*0.8))
+            validation_indices = [x for x in indices if x not in train_indices]
+            # select data
+            trainX = [X[x] for x in train_indices]
+            validationX = [X[x] for x in validation_indices]
+
+
+            # print("Train X len: "+str(len(trainX)))
+            # print("Validate X len: "+str(len(validationX)))
+
+            train_args['X'] = trainX
+            train_args['Y'] = Y
+
+            classifier, X_train_section, X_validate_section, X_test_section, Y_section = self.train(**train_args)
+            classifiers.append(classifier)
+            X_trains.append(X_train_section)
+            # X_validates.append(X_validate_section)
+            X_validates.append(validationX)
+            X_tests.append(X_test_section)
+            Ys.append(Y_section)
+
+            #gets output validation data
+            generator = self.create_data_generator(X_validates[-1], Y, len(X_validates[-1]), "test")
+            X_images, y_non_category = generator.get_processed_images(start=0, end=len(X_validates[-1]))
+            Y_validates.append(y_non_category)
+
+            print("Len X_Validate: "+str(len(X_validates[-1])))
+            print("Len Y_validate: "+str(len(y_non_category)))
+            print()
+
+
+        #also returns the optimal weights
+        return classifiers, X_trains, X_validates, X_tests, Ys
 
 
     """
@@ -657,6 +716,44 @@ class Classifier(ABC):
         return accuracy
 
 
+
+    """
+    Performs weight optimization to find the optimal weights for each model to optimize performance on the provided validation dataset
+    """
+    def get_optimal_weights(self, models, X_validate, Y_validate):
+        #averaging ensemble (equal weights)
+        initial_weights = [1.0/len(models) for weight in range(len(models))]
+        score = self.evaluate_ensemble(models, initial_weights, X_validate, Y_validate)
+        print('Equal Weights Score: %.3f' % score)
+
+
+
+        # define bounds on each weight
+        weight_bounds = [(0.0, 1.0) for model in range(len(models))]
+        # arguments to the loss function
+        search_arg = (models, X_validate, Y_validate)
+
+        #Performs an optimization function in regards to the provided loss function to get optimal weights
+        print("Performing Differential Evolution to calculate optimal weights")
+        result = differential_evolution(func = self.weighted_averaging_loss_function, 
+                                        bounds = weight_bounds, 
+                                        args = search_arg, 
+                                        maxiter = 1, #standard could be 1000
+                                        tol = 1e-7,
+                                        disp = True)
+
+        # get the chosen weights
+        weights = self.normalize(result['x'])
+        print('Optimized Weights: %s' % weights)
+
+
+        # evaluate chosen weights
+        score = self.evaluate_ensemble(models, weights, X_validate, Y_validate)
+        print('Optimized Weights Score: %.3f' % score)
+
+        return weights
+
+
     """
     Incorporates the technique of model-averaging ensembling, which is the process of training multiple of the same neural networks on the same training set, 
     then averaging their predictions. 
@@ -702,44 +799,13 @@ class Classifier(ABC):
 
 
         print("-- Start Weight Optimization --")
-
-
-
-        #averaging ensemble (equal weights)
-        initial_weights = [1.0/num_models for weight in range(num_models)]
-        score = self.evaluate_ensemble(classifiers, initial_weights, X_validates[0], Y_validates[0])
-        print('Equal Weights Score: %.3f' % score)
-
-
-
-        # define bounds on each weight
-        weight_bounds = [(0.0, 1.0) for model in range(num_models)]
-        # arguments to the loss function
-        search_arg = (classifiers, X_validates[0], Y_validates[0])
-
-        #Performs an optimization function in regards to the provided loss function to get optimal weights
-        print("Performing Differential Evolution to calculate optimal weights")
-        result = differential_evolution(func = self.weighted_averaging_loss_function, 
-                                        bounds = weight_bounds, 
-                                        args = search_arg, 
-                                        maxiter = 10, #standard could be 1000
-                                        tol = 1e-7,
-                                        disp=True)
-
-        # get the chosen weights
-        weights = self.normalize(result['x'])
-        print('Optimized Weights: %s' % weights)
-
-
-        # evaluate chosen weights
-        score = self.evaluate_ensemble(classifiers, weights, X_validates[0], Y_validates[0])
-        print('Optimized Weights Score: %.3f' % score)
-
+        # weights = self.get_optimal_weights(classifiers, X_validates[0], Y_validates[0])
+        weights = [0.39759092, 0.13496959, 0.46743949] #debugging
         print("-- End of Weight Optimization --")
 
 
-
-        return classifiers, X_trains, X_validates, X_tests, Ys
+        #also returns the optimal weights
+        return classifiers, X_trains, X_validates, X_tests, Ys, weights
 
 
     """
@@ -902,6 +968,10 @@ class Classifier(ABC):
         #splits into training, validation, and test datasets
         X_train, X_validate, X_test = self.data_handler.split_data(X, train_ratio, val_ratio)
 
+        #stops if no data to train on
+        if len(X_train)==0:
+            return None, None, None, None, None
+
         print("X_train size: "+str(len(X_train)))
         print("X_validate size: "+str(len(X_validate)))
 
@@ -957,7 +1027,8 @@ class Classifier(ABC):
         balanced = self.hyperparameters[classification_type][model_arch]['balanced']
         n_splits = self.hyperparameters[classification_type][model_arch]['resampling_ensemble_n_splits']
         k_folds = self.hyperparameters[classification_type][model_arch]['kfold_cross_validation_k_folds']
-        num_models = self.hyperparameters[classification_type][model_arch]['weighted_avg_ensemble_num_models']
+        weight_avg_num_models = self.hyperparameters[classification_type][model_arch]['weighted_avg_ensemble_num_models']
+        bagging_num_models = self.hyperparameters[classification_type][model_arch]['bagging_num_models']
 
         params = {"model_arch": model_arch, 
                     "dataset_size": dataset_size, 
@@ -968,16 +1039,31 @@ class Classifier(ABC):
                     "epochs": epochs}
 
 
-        if training_type == "regular":
+        classifiers = []
+        X_trains = []
+        X_validates = []
+        X_tests = []
+        Ys = []
+        periphery = {}
+
+        if training_type.lower() == "regular":
             # #trains model, which returns the trained model and dataset segments
             # classifier, X_train, X_validate, X_test, Y = self.train(**params)
             classifiers, X_trains, X_validates, X_tests, Ys = self.resampling_ensemble(n_splits = 0, **params)
-        elif training_type == "resampling_ensemble":
+
+        elif training_type.lower() == "resampling_ensemble":
             classifiers, X_trains, X_validates, X_tests, Ys = self.resampling_ensemble(n_splits = n_splits, **params)
-        elif training_type == "kfold_cross_validation":
+
+        elif training_type.lower() == "kfold_cross_validation":
             classifiers, X_trains, X_validates, X_tests, Ys = self.kfold_cross_validation(k_folds = k_folds, **params)
-        elif training_type == "weighted_model_averaging":
-            classifiers, X_trains, X_validates, X_tests, Ys = self.weighted_model_averaging(num_models = num_models, **params)
+
+        elif training_type.lower() == "weighted_model_averaging":
+            classifiers, X_trains, X_validates, X_tests, Ys, opt_weights = self.weighted_model_averaging(num_models = weight_avg_num_models, **params)
+            periphery['optimal_weights'] = opt_weights
+
+        elif training_type.lower() == "bagging":
+            classifiers, X_trains, X_validates, X_tests, Ys = self.bagging(num_models=bagging_num_models, **params)
+
         else:
             classifiers, X_trains, X_validates, X_tests, Ys = None
 
@@ -988,11 +1074,6 @@ class Classifier(ABC):
 
 
 
-        # print("X_train: "+str(len(X_train[0])))
-        # print("X_validate: "+str(len(X_validate[0])))
-        # print("X_test: "+str(len(X_test[0])))
-        # print("Y: "+str(len(Y[0])))
-
 
 
         #performs prediction on training portion
@@ -1001,7 +1082,10 @@ class Classifier(ABC):
         training_prediction_analysis = []
         try:
             for i in range(0, len(classifiers)):
-                training_prediction_analysis.append(self.prediction_analysis(classifier=classifiers[i], feature_dataset=X_trains[i], full_label_dataset=Ys[i], batch_size=batch_size))
+                training_prediction_analysis.append(self.prediction_analysis(classifier=classifiers[i], 
+                                                                            feature_dataset=X_trains[i], 
+                                                                            full_label_dataset=Ys[i], 
+                                                                            batch_size=batch_size))
         except Exception as error:
             print("Couldn't perform training prediction analysis.")
             print(error)
@@ -1013,17 +1097,20 @@ class Classifier(ABC):
         validation_prediction_analysis = []
         try:
             for i in range(0, len(classifiers)):
-                validation_prediction_analysis.append(self.prediction_analysis(classifier=classifiers[i], feature_dataset=X_validates[i], full_label_dataset=Ys[i], batch_size=batch_size))
+                validation_prediction_analysis.append(self.prediction_analysis(classifier=classifiers[i], 
+                                                                                feature_dataset=X_validates[i], 
+                                                                                full_label_dataset=Ys[i], 
+                                                                                batch_size=batch_size))
         except Exception as error:
             print("Couldn't perform validation prediction analysis.")
             print(error)
 
 
 
-        self.save_training_session("binary", training_type, classifiers, model_arch, training_prediction_analysis, validation_prediction_analysis)
+        self.save_training_session("binary", training_type, classifiers, model_arch, training_prediction_analysis, validation_prediction_analysis, periphery)
 
     #saves training session, like the trained model, hyperparameters, and results, for future review
-    def save_training_session(self, classification_type, training_type, classifiers, model_arch, training_analysis, validation_analysis):
+    def save_training_session(self, classification_type, training_type, classifiers, model_arch, training_analysis, validation_analysis, periphery_data=None):
 
         ## Plot training history ##
         # # plot the training loss and accuracy
@@ -1077,6 +1164,11 @@ class Classifier(ABC):
         for x in range(0, len(validation_analysis)):
             to_save = {'all_stats': validation_analysis[x][0], 'agg_stats': validation_analysis[x][1]}
             self.data_handler.save_to_json(session_dir+"/validation_stats_"+str(x+1)+"_of_"+str(len(training_analysis))+".json", to_save)
+
+        #Saves Periphery data
+        if periphery_data!=None:
+            to_save = periphery_data
+            self.data_handler.save_to_json(session_dir+"/periphery_data.json", to_save)
 
 
 

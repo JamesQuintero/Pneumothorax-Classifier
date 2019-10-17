@@ -113,6 +113,10 @@ class Main:
                 print()
 
                 training_type = self.get_model_training_type()
+                if training_type == "":
+                    return
+
+
                 classifier.train_evaluate(model_arch, training_type)
 
 
@@ -284,6 +288,7 @@ class Main:
         print("Model building step: ")
         print("1) Train")
         print("2) Test")
+        print("0) Quit")
 
         choice = int(input("Choice: "))
 
@@ -292,6 +297,8 @@ class Main:
             step = "train"
         elif choice==2:
             step = "test"
+        elif choice==0:
+            step = ""
         else:
             print("Improper model building step")
             
@@ -302,6 +309,7 @@ class Main:
         print("Model architecture: ")
         print("1) CNN")
         print("2) U-net")
+        print("0) Quit")
 
         model_arch_choice = int(input("Choice: "))
 
@@ -310,6 +318,8 @@ class Main:
             model_arch = "cnn"
         elif model_arch_choice==2:
             model_arch = "unet"
+        elif model_arch_choice==0:
+            model_arch = ""
         else:
             print("Improper model architecture")
             
@@ -343,6 +353,8 @@ class Main:
         print("2) Resample Ensembling")
         print("3) K-fold cross validation")
         print("4) Model averaging")
+        print("5) Bagging (Bootstrapping Aggregation)")
+        print("0) Quit")
         choice = int(input("Choice: "))
 
         training_type = "regular"
@@ -352,6 +364,12 @@ class Main:
             training_type = "kfold_cross_validation"
         elif choice==4:
             training_type = "weighted_model_averaging"
+        elif choice==5:
+            training_type = "bagging"
+
+        #if user quits
+        elif choice==0:
+            training_type = ""
 
         return training_type
 
