@@ -255,7 +255,10 @@ class Main:
     #View Train/Test results
     def view_results(self):
         print("-- To be implemented later --")
-        pass
+
+
+        
+
 
 
 

@@ -168,7 +168,9 @@ class Classifier(ABC):
 
 
 
-    #returns statistical measures related to confusion matrix
+    """
+    returns statistical measures related to confusion matrix
+    """
     def calculate_statistical_measures(self, confusion_matrix):
         statistical_measures = {}
 
@@ -451,6 +453,11 @@ class Classifier(ABC):
         print()
 
 
+
+    """
+    Calculates statistical measures for each image in target_data 
+    Aggregates confusion matrices and statistical measures
+    """
     def statistical_analysis(self, target_data, prediction_data, verbose=False):
 
         if verbose:
@@ -539,89 +546,6 @@ class Classifier(ABC):
 
 
         return self.statistical_analysis(y_non_category, y_predict_non_category, verbose)
-
-
-    """
-    A resampling technique used to estimate statistics on a population by sampling a dataset with replacement.
-    Also known as Bootstrapping or Bootstrap Aggregation
-    Can keep adding ensemble members since bagging does not overfit
-    https://machinelearningmastery.com/a-gentle-introduction-to-the-bootstrap-method/
-    """
-    def bagging(self, num_models = 1, **train_args):
-        print("Train arguments: "+str(train_args))
-        dataset_size = train_args['dataset_size']
-        X = self.get_processed_image_paths(balanced=train_args['balanced'], max_num=dataset_size)
-        Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
-
-        print("Dataset size: "+str(dataset_size))
-        print("num models: "+str(num_models))
-        print()
-
-
-        #list of indices running the length of X
-        indices = [i for i in range(len(X))]
-
-
-        classifiers = []
-        X_trains = []
-        X_validates = []
-        X_tests = []
-        Ys = []
-        Y_validates = []
-        results = []
-        for section in range(0, num_models):
-
-            ## Performes the resampling with replacement ##
-            train_indices = resample(indices, replace=True, n_samples=int(len(indices)*0.8))
-            validation_indices = [x for x in indices if x not in train_indices]
-            # select data
-            trainX = [X[x] for x in train_indices]
-            validationX = [X[x] for x in validation_indices]
-
-
-            # print("Train X len: "+str(len(trainX)))
-            # print("Validate X len: "+str(len(validationX)))
-
-            train_args['X'] = trainX
-            train_args['Y'] = Y
-
-            classifier, X_train_section, X_validate_section, X_test_section, Y_section = self.train(**train_args)
-            classifiers.append(classifier)
-            X_trains.append(X_train_section)
-            # X_validates.append(X_validate_section)
-            X_validates.append(validationX)
-            X_tests.append(X_test_section)
-            Ys.append(Y_section)
-
-            #gets output validation data
-            generator = self.create_data_generator(X_validates[-1], Y, len(X_validates[-1]), "test")
-            X_images, y_non_category = generator.get_processed_images(start=0, end=len(X_validates[-1]))
-            Y_validates.append(y_non_category)
-
-            print("Len X_Validate: "+str(len(X_validates[-1])))
-            print("Len Y_validate: "+str(len(y_non_category)))
-            print()
-
-
-        #also returns the optimal weights
-        return classifiers, X_trains, X_validates, X_tests, Ys
-
-
-    """
-    Uses a pre-trained model on similar radiographs or data, and uses it as a starting point for this model. 
-    This allows for features already learned to be a starting point, and for hidden layer weights to be the initial weights. 
-    Transfer learning benefits by having much better generalization, meaning less standard deviation, and higher accuracy overall. 
-    """
-    def transfer_learning(self):
-        pass
-
-
-    """
-    Iterates through many combinations of hyperparameters and returns the best performing model along with its hyperparameters
-    Used to determine best hyperparameters instead of manually manipulating them yourself
-    """
-    def grid_search(self):
-        hyperparameters = {}
 
 
     """
@@ -755,6 +679,116 @@ class Classifier(ABC):
 
 
     """
+    Uses a pre-trained model on similar radiographs or data, and uses it as a starting point for this model. 
+    This allows for features already learned to be a starting point, and for hidden layer weights to be the initial weights. 
+    Transfer learning benefits by having much better generalization, meaning less standard deviation, and higher accuracy overall. 
+    """
+    def transfer_learning(self):
+        pass
+
+
+    """
+    Iterates through many combinations of hyperparameters and returns the best performing model along with its hyperparameters
+    Used to determine best hyperparameters instead of manually manipulation
+    """
+    def grid_search(self):
+        hyperparameters = {}
+
+
+
+    """
+    A resampling technique used to estimate statistics on a population by sampling a dataset with replacement.
+    Also known as Bootstrapping or Bootstrap Aggregation
+    Can keep adding ensemble members since bagging does not overfit
+    https://machinelearningmastery.com/a-gentle-introduction-to-the-bootstrap-method/
+    """
+    def bagging(self, num_models = 1, **train_args):
+        print("Train arguments: "+str(train_args))
+        dataset_size = train_args['dataset_size']
+        X = self.get_processed_image_paths(balanced=train_args['balanced'], max_num=dataset_size)
+        Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+        print("Dataset size: "+str(dataset_size))
+        print("num models: "+str(num_models))
+        print()
+
+
+        #list of indices running the length of X
+        indices = [i for i in range(len(X))]
+
+
+        classifiers = []
+        X_trains = []
+        X_validates = []
+        X_tests = []
+        Ys = []
+        Y_validates = []
+        results = []
+        for section in range(0, num_models):
+
+            ## Performes the resampling with replacement ##
+            train_indices = resample(indices, replace=True, n_samples=int(len(indices)*0.8))
+            validation_indices = [x for x in indices if x not in train_indices]
+            # select data
+            trainX = [X[x] for x in train_indices]
+            validationX = [X[x] for x in validation_indices]
+
+
+            print("Train X len: "+str(len(trainX)))
+            print("Validate X len: "+str(len(validationX)))
+
+            train_args['X'] = trainX
+            train_args['Y'] = Y
+
+
+
+            classifier, X_train_section, X_validate_section, X_test_section, Y_section = self.train(**train_args)
+            classifiers.append(classifier)
+            X_trains.append(X_train_section)
+            # X_validates.append(X_validate_section)
+            X_validates.append(validationX)
+            X_tests.append(X_test_section)
+            Ys.append(Y_section)
+
+            #gets output validation data
+            generator = self.create_data_generator(X_validates[-1], Y, len(X_validates[-1]), "test")
+            X_images, y_non_category = generator.get_processed_images(start=0, end=len(X_validates[-1]))
+            Y_validates.append(y_non_category)
+
+            print("Len X_Validate: "+str(len(X_validates[-1])))
+            print("Len Y_validate: "+str(len(y_non_category)))
+            print()
+
+            #prints performance on the validation dataset
+            self.prediction_analysis(classifier, X_validates[-1], Y, batch_size=1, verbose=True)
+
+
+        #also returns the optimal weights
+        return classifiers, X_trains, X_validates, X_tests, Ys
+
+
+    """
+    Creates an ensemble from the models contained in the training history of a single model's training session 
+    Useful if there's high variance during the model training, or if training multiple models 
+    in other ensemble methods in infeasable due to the model's size and training timeframe. 
+    """
+    def horizontal_voting_ensemble(self, num_models = 1, **train_args):
+        pass
+
+
+
+    """
+    Snapshot ensemble involves using an aggressive learning rate during training to get a 
+    diverse collection of models to ensemble during a training session
+    The aggressive learning rate allows for models in the same training session over close epochs to not be so similar to each other
+    Useful for deep learning where the computation cost of training is extremely high
+    """
+    def snapshot_ensemble(self):
+        pass
+
+
+
+    """
     Incorporates the technique of model-averaging ensembling, which is the process of training multiple of the same neural networks on the same training set, 
     then averaging their predictions. 
     This ensembling method can also be weighted, where different models have different weights depending on their performing on a validation dataset
@@ -797,10 +831,13 @@ class Classifier(ABC):
             print("Len Y_validate: "+str(len(y_non_category)))
             print()
 
+            #prints performance on the validation dataset
+            self.prediction_analysis(classifier, X_validates[-1], Y, batch_size=1, verbose=True)
+
 
         print("-- Start Weight Optimization --")
-        # weights = self.get_optimal_weights(classifiers, X_validates[0], Y_validates[0])
-        weights = [0.39759092, 0.13496959, 0.46743949] #debugging
+        weights = self.get_optimal_weights(classifiers, X_validates[0], Y_validates[0])
+        # weights = [0.39759092, 0.13496959, 0.46743949] #debugging
         print("-- End of Weight Optimization --")
 
 
@@ -861,13 +898,13 @@ class Classifier(ABC):
 
 
 
-            # #performs prediction analysis on results
-            # prediction_analysis = self.prediction_analysis(classifier=classifier, 
-            #                                             feature_dataset=X_validate_section, 
-            #                                             full_label_dataset=Y_section, 
-            #                                             batch_size=train_args['batch_size'])
+            #performs prediction analysis on results
+            prediction_analysis = self.prediction_analysis(classifier=classifier, 
+                                                        feature_dataset=X_validate_section, 
+                                                        full_label_dataset=Y_section, 
+                                                        batch_size=train_args['batch_size'])
 
-            # results.append(prediction_analysis)
+            results.append(prediction_analysis)
 
 
         return classifiers, X_trains, X_validates, X_tests, Ys
@@ -931,16 +968,11 @@ class Classifier(ABC):
             Ys.append(Y_section)
 
 
-            # #performs prediction analysis on results
-            # prediction_analysis = self.prediction_analysis(classifier=classifier, 
-            #                                             feature_dataset=X_validate_section, 
-            #                                             full_label_dataset=Y, 
-            #                                             batch_size=train_args['batch_size'])
-
-            # # evaluate the model
-            # scores = model.evaluate(X[test], Y[test], verbose=0)
-            # print("%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
-            # stats.append(scores[1] * 100)
+            #performs prediction analysis on results
+            prediction_analysis = self.prediction_analysis(classifier=classifier, 
+                                                        feature_dataset=X_validate_section, 
+                                                        full_label_dataset=Y, 
+                                                        batch_size=train_args['batch_size'])
 
             fold_index += 1
 
@@ -948,6 +980,16 @@ class Classifier(ABC):
 
             
         return classifiers, X_trains, X_validates, X_tests, Ys
+
+
+
+
+    """ 
+    Stacked ensemble is an ensemble technique where instead of using linear regression, a neural network is used to calculate 
+    optimal weights in a weighted average ensemble.
+    """
+    def stacked_ensemble(self, **train_args):
+        pass
 
 
 
@@ -986,19 +1028,31 @@ class Classifier(ABC):
 
 
         training_generator = self.create_data_generator(X_train, Y, batch_size, "train")
+        validation_generator = self.create_data_generator(X_validate, Y, batch_size, "test")
 
         best_model_path = "./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5"
 
+
+        ## Creat callbacks 
         # patient early stopping
-        early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3)
+        try:
+            early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3, restore_best_weights=False)
+            # print("Early stopping with restoring best weights")
+        except:
+            #keras version is < 2.2.3, so don't include "restore_best_weights" parameter
+            early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3)
+
         model_checkpoint = ModelCheckpoint(best_model_path, monitor='val_loss', mode='min', save_best_only=True, save_weights_only=False, period=1, verbose=0)
         callback_list = [early_stopping, model_checkpoint]
 
+
+
         # fits the model on batches with real-time data augmentation:
+        # for i in range(epochs):
         classifier.fit_generator(generator=training_generator,
                                 steps_per_epoch=len(X_train) / batch_size,
                                 epochs=epochs,
-                                validation_data=self.create_data_generator(X_validate, Y, batch_size, "test"),
+                                validation_data=validation_generator,
                                 validation_steps=len(X_validate), 
                                 callbacks = callback_list)
 
@@ -1148,7 +1202,8 @@ class Classifier(ABC):
                 print("accuracy history: "+str(accuracy_history))
                 print("Loss history: "+str(loss_history))
         except Exception as error:
-            print("Error, couldn't get model training stats history")
+            print("Error, couldn't get model training stats history: "+str(error))
+            # pass
 
         #saves hyperparameters
         new_hyperparameter_path = session_dir+"/hyperparameters.json"
@@ -1253,7 +1308,9 @@ class BinaryClassifier(Classifier):
             classifier.add(BatchNormalization())
 
         classifier.add(MaxPooling2D(pool_size = pool_size))
-        classifier.add(GaussianNoise(noise_amount)) #Adds noise
+
+        if noise_amount>0:
+            classifier.add(GaussianNoise(noise_amount)) #Adds noise
 
         #add dropout if not using batch normalization
         if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
