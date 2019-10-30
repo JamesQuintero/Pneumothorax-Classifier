@@ -201,28 +201,12 @@ class Main:
         self.data_handler.save_hyperparameters(hyperparameters)
 
 
-    def print_hyperparameters(self, classifier_type=None, model_arch=None):
-        hyperparameters = self.data_handler.load_hyperparameters()
-
-
-        #if classifier type isn't specified, print all hyperparameters
-        if classifier_type==None:
-            self.data_handler.print_hyperparameters(hyperparameters)
-            return
-        
-        #if model arch isn't specified, print all model architectures for specified classifier type
-        if model_arch==None:
-            self.data_handler.print_hyperparameters(hyperparameters[classifier_type])
-
-        #both classifier type and model architecture are specified, so print hyperparameters for it
-        self.data_handler.print_hyperparameters(hyperparameters[classifier_type][model_arch])
-
-
     """
     Preprocessor menu
     """
     def preprocess(self):
-        self.image_preprocessor = ImagePreprocessor()
+        # self.image_preprocessor = ImagePreprocessor()
+        self.image_preprocessor = ChestRadiograph()
 
         print()
         print()
@@ -252,15 +236,94 @@ class Main:
         self.image_preprocessor.bulk_preprocessing(dataset_type=dataset_type, replace=replace)
 
 
-    #View Train/Test results
+
+
+    """
+    View Train/Test results
+    """
     def view_results(self):
-        print("-- To be implemented later --")
+        # print()
+        # print("# To be implemented later")
+        # print()
+
+        while True:
+            print()
+            print()
+            print("-- View Results Menu --")
+            print()
+
+            # classifier=0
+            # classifier_type, model_arch, date_to_retrieve = 0
+
+            classifier, classifier_type = self.initialize_classifier()
+            if classifier is None:
+                return
+
+            print()
+
+
+            # model_building_step = self.get_model_building_step()
+            # if model_building_step == "":
+            #     return
+
+
+            # print()
+            
+
+            model_arch = self.get_model_architecture()
+            if model_arch == "":
+                return
+
+
+            print()
+
+
+
+            #gets current day
+            # date_to_retrieve = self.get_available_date()
+            date_to_retrieve = self.get_date()
+
+            while date_to_retrieve!=-1:
+                print()
+
+
+                training_session_num = self.get_training_session_num("chest_radiograph", classifier_type, model_arch, date_to_retrieve)
+                while training_session_num!=-1:
+
+
+                    classifier.view_training_session_results("chest_radiograph", model_arch, date_to_retrieve, training_session_num)
+
+                    print()
+                    print()
+                    print()
+                    print()
+
+
+                    training_session_num = self.get_training_session_num("chest_radiograph", classifier_type, model_arch, date_to_retrieve)
+                date_to_retrieve = self.get_date()
 
 
         
 
 
 
+
+
+    def print_hyperparameters(self, classifier_type=None, model_arch=None):
+        hyperparameters = self.data_handler.load_hyperparameters()
+
+
+        #if classifier type isn't specified, print all hyperparameters
+        if classifier_type==None:
+            self.data_handler.print_hyperparameters(hyperparameters)
+            return
+        
+        #if model arch isn't specified, print all model architectures for specified classifier type
+        if model_arch==None:
+            self.data_handler.print_hyperparameters(hyperparameters[classifier_type])
+
+        #both classifier type and model architecture are specified, so print hyperparameters for it
+        self.data_handler.print_hyperparameters(hyperparameters[classifier_type][model_arch])
 
     def initialize_classifier(self):
         print("Classification type: ")
@@ -328,6 +391,47 @@ class Main:
             
 
         return model_arch
+
+    #returns date object corresponding to user provided date
+    def get_date(self):
+
+        prompt = "Date to view (YYYY-MM-DD, -1 to quit): "
+        date_to_view = input(prompt)
+        # date_to_view = "2019-10-22"
+
+
+        while True and date_to_view!=-1:
+
+            date_to_view = self.data_handler.string_to_date(date_to_view)
+            if date_to_view == "":
+                print("Please try again, but with proper date format")
+                date_to_view = input(prompt)
+            #if successful format, just stop
+            else:
+                break
+
+        return date_to_view
+
+
+
+    #retrieves possible dates of the training sessions run under project, training_type, and model architecture
+    def get_available_date(self, project, training_type, model_arch):
+        pass
+
+
+    #get user input for training session number under project, training_type, model architecture, and date
+    def get_training_session_num(self, project, classifier_type, model_arch, date_to_retrieve):
+
+        # available_training_session_numbers = self.data_handler.
+
+        try:
+            training_session_number = int(input("Training session number (-1 to quit): "))
+        except Exception as error:
+            training_session_number = -1
+
+        return training_session_number
+
+
 
     #allows the user to modify hyperparameters json file
     def user_modify_hyperparameters(self, classifier_type, model_arch):

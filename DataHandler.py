@@ -7,6 +7,7 @@ import os
 import pandas as pd #for reading data files
 import json
 from datetime import date
+from datetime import datetime
 import shutil
 
 import numpy as np
@@ -131,30 +132,51 @@ class DataHandler:
     def get_today(self):
         return str(date.today())
 
+    #converts a provided string to proper YYYY-MM-DD date object
+    def string_to_date(self, date_str):
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d").date()
+        except:
+            print("Error, couldn't convert "+str(date_str)+" to YYYY-MM-DD date")
+            return ""
+
 
     def get_hyperparameters_path(self):
         return self.hyperparameters_path
 
     #returns hyperparameter dictionary from hyperparameter file
-    def load_hyperparameters(self):
+    def load_hyperparameters(self, specific_path=""):
 
-        if os.path.isfile(self.hyperparameters_path)==False:
-            print("Error, hyperparameters file doesn't exist: "+str(self.hyperparameters_path))
+        if specific_path=="":
+            specific_path = self.hyperparameters_path
+
+        return self.load_json(specific_path)
+
+
+
+    #reads json file and returns data in json format
+    def load_json(self, json_path):
+        if os.path.isfile(json_path)==False:
+            print("Error, json file doesn't exist: "+str(json_path))
             return {}
 
         try:
-            with open(self.hyperparameters_path) as json_file:
+            with open(json_path) as json_file:
                 data = json.load(json_file)
                 
 
                 return data
         except Exception as error:
-            print("Error, couldn't load hyperparameters: "+str(error))
+            print("Error, couldn't load json file: "+str(error))
             return {}
 
     #prints hyperparameter dictionary in a neat format
     def print_hyperparameters(self, hyperparameters):
-        print(json.dumps(hyperparameters, indent=4, sort_keys=True))
+        self.print_json(hyperparameters)
+
+    #prints json data in a neat format
+    def print_json(self, json_data):
+        print(json.dumps(json_data, indent=4, sort_keys=True))
 
 
     #saves hyperparameters dictionary to the json file
@@ -403,6 +425,12 @@ if __name__=="__main__":
     data_handler = DataHandler()
 
     # data_handler.save_hyperparameters({})
-    hyperparameters = data_handler.load_hyperparameters()
+    # hyperparameters = data_handler.load_hyperparameters()
 
-    print(hyperparameters)
+    # print(hyperparameters)
+
+
+    date_str = input("Date string (YYYY-MM-DD): ")
+    datetime = data_handler.string_to_date(date_str)
+
+    print(datetime)

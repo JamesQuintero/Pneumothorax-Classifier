@@ -17,6 +17,7 @@ import random
 import json
 import scipy
 import imageio
+from datetime import datetime
 
 #ML libraries
 import numpy as np
@@ -170,6 +171,9 @@ class Classifier(ABC):
 
     """
     returns statistical measures related to confusion matrix
+    confusion_matrix is in the following format
+    [TN  FP]
+    [FN  TP]
     """
     def calculate_statistical_measures(self, confusion_matrix):
         statistical_measures = {}
@@ -434,7 +438,11 @@ class Classifier(ABC):
         return conf_matrix
 
     def print_statistical_measures(self, stats):
-        print()
+        # print()
+        # print()
+        print("----------------------------------")
+        confusion_matrix = [[stats['TN'], stats['FP']], [stats['FN'], stats['TP']]]
+        self.print_confusion_matrix(confusion_matrix)
         print("----------------------------------")
         print("Accuracy:                "+str(stats['accuracy']))
         print("----------------------------------")
@@ -450,7 +458,18 @@ class Classifier(ABC):
         print("F1:                      "+str(stats['F1']))
         print("MCC:                     "+str(stats['MCC']))
         print("----------------------------------")
-        print()
+        # print()
+
+
+
+    """
+    prints confusion matrix in format
+    [    TN,   FP]
+    [    FN,   TP]
+    """
+    def print_confusion_matrix(self, confusion_matrix):
+        print("[{0:5d}, {1:5d}]".format(int(confusion_matrix[0][0]), int(confusion_matrix[0][1])))
+        print("[{0:5d}, {1:5d}]".format(int(confusion_matrix[1][0]), int(confusion_matrix[1][1])))
 
 
 
@@ -994,6 +1013,36 @@ class Classifier(ABC):
 
 
     """
+    Training technique for not-so-stable models where the average weights of the models over the past few epochs of training are averaged, 
+    and the final model uses those average weights
+    """
+    def polyak_ruppert_averaging(self):
+        # # create a model from the weights of multiple models
+        # def model_weight_ensemble(members, weights):
+        #     # determine how many layers need to be averaged
+        #     n_layers = len(members[0].get_weights())
+        #     # create an set of average model weights
+        #     avg_model_weights = list()
+        #     for layer in range(n_layers):
+        #     # collect this layer from each model
+        #     layer_weights = array([model.get_weights()[layer] for model in members])
+        #     # weighted average of weights for this layer
+        #     avg_layer_weights = average(layer_weights, axis=0, weights=weights)
+        #     # store average layer weights
+        #     avg_model_weights.append(avg_layer_weights)
+        # # create a new model with the same structure
+        # model = clone_model(members[0])
+        # # set the weights in the new
+        # model.set_weights(avg_model_weights)
+        # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        # return model
+
+
+        pass
+
+
+
+    """
     trains model with model_arch architecture
     returns the Keras model, training dataset, validation dataset, testing dataset, and all labels
     """
@@ -1036,11 +1085,11 @@ class Classifier(ABC):
         ## Creat callbacks 
         # patient early stopping
         try:
-            early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3, restore_best_weights=False)
+            early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=5, restore_best_weights=False)
             # print("Early stopping with restoring best weights")
         except:
             #keras version is < 2.2.3, so don't include "restore_best_weights" parameter
-            early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3)
+            early_stopping = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=5)
 
         model_checkpoint = ModelCheckpoint(best_model_path, monitor='val_loss', mode='min', save_best_only=True, save_weights_only=False, period=1, verbose=0)
         callback_list = [early_stopping, model_checkpoint]
@@ -1226,6 +1275,112 @@ class Classifier(ABC):
             self.data_handler.save_to_json(session_dir+"/periphery_data.json", to_save)
 
 
+    """
+    Reads training session results saved under ./training_sessions folder, then displays data in readable and logical manner
+    """
+    @abstractmethod
+    def view_training_session_results(self, project, classifier_type, model_arch, date, session_num):
+        print()
+
+        date_str = datetime.strftime(date, "%Y-%m-%d")
+
+        path = self.data_handler.get_training_session_path(project=project, 
+                                                            classification_type=classifier_type, 
+                                                            model_arch=model_arch, 
+                                                            date=date_str, 
+                                                            training_session_num=session_num)
+    
+
+        #if path doesn't exist, then exit
+        if os.path.exists(path)==False:
+            return
+
+
+
+        file_list = os.listdir(path)
+
+        # print(file_list)
+        for file in file_list:
+            print(file)
+        print()
+
+        hyperparameters_path = path+"/hyperparameters.json"
+
+        ## prints hyperparameters
+
+        print("-- hyperparameters corresponding to "+str(classifier_type)+" classifier with "+str(model_arch)+" model architecture ")
+        hyperparameters = self.data_handler.load_hyperparameters(hyperparameters_path)
+        self.data_handler.print_hyperparameters(hyperparameters[classifier_type][model_arch])
+        print()
+
+        print()
+        print("Saved models: ")
+        for file in file_list:
+            if ".h5" in file:
+                print(file)
+        print()
+        print()
+
+
+        #prints training and validation json data
+        def print_json_results(file):
+            print()
+            print("#"+str(file).replace(".json", "")) #prints filename
+            json_data = self.data_handler.load_json(path+"/"+file)
+
+            agg_stats = json_data['agg_stats']
+            print("Aggregate stats: ")
+            self.print_statistical_measures(agg_stats)
+
+            
+            if len(json_data['all_stats'])>1:
+                print()
+                print()
+                print("Individual stats:")
+                for stats in json_data['all_stats']:
+                    self.print_statistical_measures(stats)
+                    print()
+
+
+
+
+        ## Prints training results
+        print()
+        print("-- Training Results --")
+        for file in file_list:
+            #checks if is a training file
+            if "train_stats" in file:
+                print()
+                print_json_results(file)
+        print()
+        print()
+
+
+        ## Prints validation results
+        print()
+        print("-- Validation Results --")
+        for file in file_list:
+            #checks if is a training file
+            if "validation_stats" in file:
+                print()
+                print_json_results(file)
+        print()
+        print()
+
+
+        ## Prints peripharay data
+        for file in file_list:
+            if "periphery_data" in file:
+                print()
+                print("-- Periphery Data --")
+                periphery_data = self.data_handler.load_json(path+"/"+file)
+                self.data_handler.print_json(periphery_data)
+
+
+
+
+
+
 
 
     #performs predictions and subsequent statistic calculations on unofficial test dataset
@@ -1280,9 +1435,13 @@ class BinaryClassifier(Classifier):
         activation_regularization = self.hyperparameters['binary']['cnn']['activation_regularization']
         weight_limit = self.hyperparameters['binary']['cnn']['weight_limit']
         noise_amount = self.hyperparameters['binary']['cnn']['noise_std']
+        batch_normalization = self.hyperparameters['binary']['cnn']['batch_normalization']
 
         if loss=="dice_coef_loss":
             loss = self.dice_coef_loss
+
+        metrics = "accuracy"
+        # metrics = self.dice_coef
 
 
 
@@ -1304,7 +1463,7 @@ class BinaryClassifier(Classifier):
                             kernel_constraint=max_norm(weight_limit))) #constrains weights to avoid exploding gradients
         classifier.add(Activation(CNN_activation))
 
-        if self.hyperparameters['binary']['cnn']['batch_normalization']==True:
+        if batch_normalization:
             classifier.add(BatchNormalization())
 
         classifier.add(MaxPooling2D(pool_size = pool_size))
@@ -1313,7 +1472,7 @@ class BinaryClassifier(Classifier):
             classifier.add(GaussianNoise(noise_amount)) #Adds noise
 
         #add dropout if not using batch normalization
-        if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
+        if not batch_normalization:
             classifier.add(Dropout(dropout))
 
 
@@ -1326,16 +1485,16 @@ class BinaryClassifier(Classifier):
                                     activity_regularizer=l1(activation_regularization),
                                     kernel_constraint=max_norm(weight_limit)))
             classifier.add(Activation(CNN_activation))
-            if self.hyperparameters['binary']['cnn']['batch_normalization']==True:
+            if batch_normalization:
                 classifier.add(BatchNormalization())
 
             classifier.add(MaxPooling2D(pool_size = pool_size))
 
-            if self.hyperparameters['binary']['cnn']['noise_in_hidden_layer']==True:
+            if batch_normalization:
                 classifier.add(GaussianNoise(noise_amount)) #Adds noise
 
             #add dropout if not using batch normalization
-            if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
+            if not batch_normalization:
                 classifier.add(Dropout(dropout))
 
 
@@ -1345,13 +1504,12 @@ class BinaryClassifier(Classifier):
 
         #128 is an arbitrary number that can be decreased to lower computation time, and increased for better accuracy
         classifier.add(Dense(units = last_layer_size, activation = dense_activation))
-        if self.hyperparameters['binary']['cnn']['batch_normalization']==False:
+        if not batch_normalization:
             classifier.add(Dropout(dropout))
 
         classifier.add(Dense(units = 1, activation = output_activation))
 
-        classifier.compile(optimizer = optimizer, loss = loss, metrics = ['accuracy'])
-        # classifier.compile(optimizer = 'adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
+        classifier.compile(optimizer = optimizer, loss = loss, metrics = [metrics])
 
         print("Creating CNN")
         classifier.summary()
@@ -1372,11 +1530,23 @@ class BinaryClassifier(Classifier):
         last_layer_size = self.hyperparameters['binary']['unet']['last_layer_size']
         batch_normalization = self.hyperparameters['binary']['unet']['batch_normalization']
 
+        dropout = self.hyperparameters['binary']['unet']['dropout']
+        weight_regularization = self.hyperparameters['binary']['unet']['weight_regularization']
+        activation_regularization = self.hyperparameters['binary']['unet']['activation_regularization']
+        weight_limit = self.hyperparameters['binary']['unet']['weight_limit']
+        noise_amount = self.hyperparameters['binary']['unet']['noise_std']
+
+
         if loss=="dice_coef_loss":
             loss = self.dice_coef_loss
 
         if optimizer=="adam":
             optimizer = Adam(lr=1e-5)
+
+
+
+
+
 
         # inputs = Input((self.image_width, self.image_height, 1))
         # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
@@ -1478,24 +1648,104 @@ class BinaryClassifier(Classifier):
         # # model = Model(input=inputs, output=conv10)
 
 
+        
 
 
+
+
+
+        # inputs = Input((self.image_width, self.image_height, 1))
+        
+        # conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(inputs)
+        # conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv1)
+        # if batch_normalization:
+        #     conv1 = BatchNormalization()(conv1)
+
+        # pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
+
+        # conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(pool1)
+        # conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv2)
+        # if batch_normalization:
+        #     conv2 = BatchNormalization()(conv2)
+        # pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
+
+        # conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
+        # conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
+        # if batch_normalization:
+        #     conv3 = BatchNormalization()(conv3)
+        # # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+
+        # # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
+        # # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
+
+        # # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=3)
+        # # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
+        # # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
+
+        # up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
+        # conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
+        # conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv8)
+        # if batch_normalization:
+        #     conv8 = BatchNormalization()(conv8)
+
+        # up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=3)
+        # conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(up9)
+        # conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
+        # if batch_normalization:
+        #     conv9 = BatchNormalization()(conv9)
+
+        # # conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
+
+        # conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
+        # # model = Model(inputs=inputs, outputs=conv10)
+
+
+        # dense1 = Flatten()(conv10)
+        # dense1 = Dense(units = last_layer_size, activation = dense_activation)(dense1)
+
+        # dense2 = Dense(units = 1, activation = output_activation)(dense1)
+        # dense2 = Dropout(dropout)(dense2)
+
+        
+        # model = Model(inputs=inputs, outputs=dense2)
+
+        # # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
+        # model.compile(optimizer=optimizer, loss=loss, metrics=["accuracy"])
+
+        # print("Creating u-net")
+        # model.summary()
+
+
+
+
+
+        def create_conv_layer(size):
+            return Conv2D(size, 
+                        filter_size, 
+                        activation=conv_activation, 
+                        padding='same', 
+                        kernel_initializer='he_uniform', #Initializes weights
+                        kernel_regularizer=l2(weight_regularization), #regularizes weights to avoid overfitting
+                        activity_regularizer=l1(activation_regularization), #regularizes activation to avoid overfitting
+                        kernel_constraint=max_norm(weight_limit))
 
         inputs = Input((self.image_width, self.image_height, 1))
-        conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(inputs)
-        conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv1)
+        
+        conv1 = create_conv_layer(start_size*1)(inputs)
+        conv1 = create_conv_layer(start_size*1)(conv1)
         if batch_normalization:
             conv1 = BatchNormalization()(conv1)
+
         pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
 
-        conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(pool1)
-        conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv2)
+        conv2 = create_conv_layer(start_size*2)(pool1)
+        conv2 = create_conv_layer(start_size*2)(conv2)
         if batch_normalization:
             conv2 = BatchNormalization()(conv2)
         pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
 
-        conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
-        conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
+        conv3 = create_conv_layer(start_size*4)(pool2)
+        conv3 = create_conv_layer(start_size*4)(conv3)
         if batch_normalization:
             conv3 = BatchNormalization()(conv3)
         # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
@@ -1508,14 +1758,14 @@ class BinaryClassifier(Classifier):
         # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
 
         up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
-        conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
-        conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv8)
+        conv8 = create_conv_layer(start_size*2)(up8)
+        conv8 = create_conv_layer(start_size*2)(conv8)
         if batch_normalization:
             conv8 = BatchNormalization()(conv8)
 
         up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=3)
-        conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(up9)
-        conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
+        conv9 = create_conv_layer(start_size*1)(up9)
+        conv9 = create_conv_layer(start_size*1)(conv9)
         if batch_normalization:
             conv9 = BatchNormalization()(conv9)
 
@@ -1529,7 +1779,7 @@ class BinaryClassifier(Classifier):
         dense1 = Dense(units = last_layer_size, activation = dense_activation)(dense1)
 
         dense2 = Dense(units = 1, activation = output_activation)(dense1)
-        dense2 = Dropout(0.25)(dense2)
+        dense2 = Dropout(dropout)(dense2)
 
         
         model = Model(inputs=inputs, outputs=dense2)
@@ -1548,6 +1798,7 @@ class BinaryClassifier(Classifier):
 
         generator = DataGenerator(feature_dataset, label_dataset, batch_size, "binary", **params)
         return generator
+
 
     #returns list of size 1 of confusion matrix
     def calculate_confusion_matrices(self, target_data, prediction_data):
@@ -1595,6 +1846,11 @@ class BinaryClassifier(Classifier):
         print("Date chosen: "+str(training_session_dates[date_index-1]))
 
         print(" -- To be implemented later --")
+
+
+
+    def view_training_session_results(self, project, model_arch, date, session_num):
+        super().view_training_session_results(project, "binary", model_arch, date, session_num)
 
 
 
@@ -1948,6 +2204,10 @@ class SegmentationClassifier(Classifier):
         print("Date chosen: "+str(training_session_dates[date_index-1]))
 
         print(" -- To be implemented later --")
+
+
+    def view_training_session_results(self, project, model_arch, date, session_num):
+        super().view_training_session_results(project, "binary", model_arch, date, session_num)
 
 
 

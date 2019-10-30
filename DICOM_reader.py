@@ -28,10 +28,10 @@ class DICOMReader:
     data_handler = None
 
     #path variables
-    dicom_train_path = "./data/dicom-images-train/"
+    dicom_train_path =          "./data/dicom-images-train/"
     dicom_filtered_train_path = "./data/dicom-images-train-filtered/"
-    dicom_test_path = "./data/dicom-images-test-unofficial/"
-    dicom_filtered_test_path = "./data/dicom-images-test-unofficial-filtered/"
+    dicom_test_path =           "./data/dicom-images-test-unofficial/"
+    dicom_filtered_test_path =  "./data/dicom-images-test-unofficial-filtered/"
 
     def __init__(self):
         self.data_handler = DataHandler()

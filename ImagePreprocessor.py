@@ -283,7 +283,7 @@ class ImagePreprocessor(ABC):
     """
     def detect_local_extremas(self, array, threshold=5, filter_type="min"):
         # define an connected neighborhood
-        # http://www.scipy.org/doc/api_docs/SciPy.ndimage.morphology.html#generate_binary_structure
+        # http://ww.scipy.org/doc/api_docs/SciPy.ndimage.morphology.html#generate_binary_structure
         neighborhood = morphology.generate_binary_structure(len(array.shape),2)
         
 
@@ -570,7 +570,7 @@ class ChestRadiograph(ImagePreprocessor):
     #returns 2 index values denoting edge of rib cage on left and right sides
     def crop_row_indices(self, pixels):
 
-        #gets average of column's pixel intensity
+        #gets average of row's pixel intensity
         row_intensities = []
         for x in range(0, pixels.shape[0]):
             avg = np.average(pixels[x,:])
