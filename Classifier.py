@@ -1490,7 +1490,8 @@ class BinaryClassifier(Classifier):
 
             classifier.add(MaxPooling2D(pool_size = pool_size))
 
-            if batch_normalization:
+            # if batch_normalization:
+            if noise_amount > 0:
                 classifier.add(GaussianNoise(noise_amount)) #Adds noise
 
             #add dropout if not using batch normalization

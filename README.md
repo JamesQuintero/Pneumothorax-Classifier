@@ -13,13 +13,11 @@ Takes in chest radiographs with labels of -1 for no pneumothorax, and values for
 * Cropping radiograph images to focus on ribcage
 * Image augmentation through translation, shearing, rotation, etc. 
 
-#### Training Techniques
+#### Model Training/Tuning Techniques
 * Train dataset split by 50% positive and 50% negative
 * Early stopping and saving best model during training
 * Architectures include CNN and U-net
 * Classification type includes binary and segmentation
-
-#### Model Tuning Techniques
 * Resampling ensemble
 * K-fold cross validation
 * Weighted averaging ensemble
@@ -27,11 +25,12 @@ Takes in chest radiographs with labels of -1 for no pneumothorax, and values for
 
 
 ## Future improvements
-* Grid Search
-* Transfer Learning
-* Horizontal Ensemble
-* Snapshot Ensemble
-* Stacked Ensemble
+* Add Grid Search for model training
+* Add Transfer Learning for model training
+* Add Horizontal Ensemble for model training
+* Add Snapshot Ensemble for model training
+* Add Stacked Ensemble for model training
+* Add Testing option for existing model training sessions
 
 
 This project is being designed to be easy to add in a new 2D radiograph of another body part, and require minimal changes to the code. 
