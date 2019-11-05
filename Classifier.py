@@ -1324,7 +1324,6 @@ class Classifier(ABC):
 
         #prints training and validation json data
         def print_json_results(file):
-            print()
             print("#"+str(file).replace(".json", "")) #prints filename
             json_data = self.data_handler.load_json(path+"/"+file)
 
@@ -1350,9 +1349,8 @@ class Classifier(ABC):
         for file in file_list:
             #checks if is a training file
             if "train_stats" in file:
-                print()
                 print_json_results(file)
-        print()
+                print()
         print()
 
 
@@ -1362,9 +1360,8 @@ class Classifier(ABC):
         for file in file_list:
             #checks if is a training file
             if "validation_stats" in file:
-                print()
                 print_json_results(file)
-        print()
+                print()
         print()
 
 
