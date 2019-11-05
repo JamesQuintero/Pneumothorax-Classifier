@@ -246,6 +246,8 @@ class Main:
         # print("# To be implemented later")
         # print()
 
+        project = "chest_radiograph"
+
         while True:
             print()
             print()
@@ -280,27 +282,32 @@ class Main:
 
 
             #gets current day
-            # date_to_retrieve = self.get_available_date()
-            date_to_retrieve = self.get_date()
+            self.print_available_dates(project, classifier_type, model_arch)
+            date_to_retrieve = self.get_date(project, classifier_type, model_arch)
 
-            while date_to_retrieve!=-1:
+
+            while date_to_retrieve!="-1":
                 print()
 
-
-                training_session_num = self.get_training_session_num("chest_radiograph", classifier_type, model_arch, date_to_retrieve)
+                self.print_available_training_sessions(project, classifier_type, model_arch, date_to_retrieve)
+                training_session_num = self.get_training_session_num(project, classifier_type, model_arch, date_to_retrieve)
                 while training_session_num!=-1:
 
 
-                    classifier.view_training_session_results("chest_radiograph", model_arch, date_to_retrieve, training_session_num)
+                    classifier.view_training_session_results(project, model_arch, date_to_retrieve, training_session_num)
 
                     print()
                     print()
                     print()
                     print()
 
-
-                    training_session_num = self.get_training_session_num("chest_radiograph", classifier_type, model_arch, date_to_retrieve)
-                date_to_retrieve = self.get_date()
+                    #asks user for a new training session number
+                    self.print_available_training_sessions(project, classifier_type, model_arch, date_to_retrieve)
+                    training_session_num = self.get_training_session_num(project, classifier_type, model_arch, date_to_retrieve)
+                
+                #asks user for a new date
+                self.print_available_dates(project, classifier_type, model_arch)
+                date_to_retrieve = self.get_date(project, classifier_type, model_arch)
 
 
         
@@ -393,14 +400,14 @@ class Main:
         return model_arch
 
     #returns date object corresponding to user provided date
-    def get_date(self):
+    def get_date(self, project, classification_type, model_arch):
 
         prompt = "Date to view (YYYY-MM-DD, -1 to quit): "
         date_to_view = input(prompt)
         # date_to_view = "2019-10-22"
 
 
-        while True and date_to_view!=-1:
+        while True and date_to_view!="-1":
 
             date_to_view = self.data_handler.string_to_date(date_to_view)
             if date_to_view == "":
@@ -410,13 +417,38 @@ class Main:
             else:
                 break
 
+        #gets list of avialable dates
+        available_dates = self.data_handler.get_training_session_dates(project, classification_type, model_arch)
+        if date_to_view!="-1" and str(date_to_view) not in available_dates:
+            print("Please pick an available date.")
+            return self.get_date(project, classification_type, model_arch)
+
+
         return date_to_view
 
 
 
     #retrieves possible dates of the training sessions run under project, training_type, and model architecture
-    def get_available_date(self, project, training_type, model_arch):
-        pass
+    def print_available_dates(self, project, training_type, model_arch):
+        print()
+        print("- Available training session dates -")
+        available_dates = self.data_handler.get_training_session_dates(project=project, classification_type=training_type, model_arch=model_arch)
+
+        for date in available_dates:
+            print(date)
+
+
+    """
+    Prints the available training session numbers under date_to_retrieve
+    """
+    def print_available_training_sessions(self, project, classification_type, model_arch, date_to_retrieve):
+        print()
+        print("- Available training session numbers -")
+        available_training_sessions = self.data_handler.get_training_session_numbers(project, classification_type, model_arch, date_to_retrieve)
+
+        for training_session in available_training_sessions:
+            print(training_session)
+
 
 
     #get user input for training session number under project, training_type, model architecture, and date

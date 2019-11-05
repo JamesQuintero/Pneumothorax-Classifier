@@ -44,10 +44,15 @@ class DataHandler:
         df = pd.read_csv(self.test_labels_path)
         return df
 
+
+    """
+    START of training session methods
+    """
+
+
     #returns directory path to save training session to
     def get_training_session_path(self, project="chest_radiograph", classification_type="binary", model_arch="cnn", date="2019-9-26", training_session_num=1):
         return self.training_session_dir+"/"+str(project.lower())+"/"+str(classification_type.lower())+"/"+str(model_arch.lower())+"/"+str(date.lower())+"/"+str(training_session_num)
-
 
     #creates new training session dir in the proper directory in ./training_sessions
     def create_new_training_session_dir(self, project="", classification_type="", model_arch=""):
@@ -117,7 +122,18 @@ class DataHandler:
 
 
         return path
+
+    """
+    returns a list of the available training session numbers under date_to_retrieve
+    """
+    def get_training_session_numbers(self, project="chest_radiograph", classification_type="binary", model_arch="cnn", session_date="1970-1-1"):
+        path = self.training_session_dir+"/"+str(project.lower())+"/"+str(classification_type.lower())+"/"+str(model_arch.lower())+"/"+str(session_date)
+
+        dates = os.listdir(path)
+
+        return dates
         
+
     #returns list of dates that have training sessions under specified parameters
     def get_training_session_dates(self, project="chest_radiograph", classification_type="binary", model_arch="cnn"):
 
@@ -126,6 +142,12 @@ class DataHandler:
         dates = os.listdir(path)
 
         return dates
+
+    """
+    END training session methods
+    """
+
+
 
 
     #returns iso 8601 date format string of today
