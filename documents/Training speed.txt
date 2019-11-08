@@ -1,0 +1,11 @@
+Laptop specs: 
+Intel Core i7-6500U 2.50GHz dual core. 
+16GB DDR3 1600MHz RAM
+
+
+Model arch: U-net
+Classification type: Binary
+dataset size: 200 images
+Batch size: 5 images
+
+Time per epoch: 22 minutes. 

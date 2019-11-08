@@ -544,11 +544,16 @@ class Classifier(ABC):
 
 
 
-    #predicts on the dataset, and prints a confusion matrix of the results
-    def prediction_analysis(self, classifier, feature_dataset, full_label_dataset, batch_size=1, verbose=False):
+    """
+    predicts on the dataset, and prints a confusion matrix of the results
 
-        generator = self.create_data_generator(feature_dataset, full_label_dataset, len(feature_dataset), "test")
-        preds = classifier.predict_generator(generator, steps=1)
+    Returns a 2 item tuple where 0th item is all stats, and 1st item is aggregate stats
+    """
+    def prediction_analysis(self, classifier, feature_dataset, full_label_dataset, batch_size=1, verbose=False):
+        generator = self.create_data_generator(feature_dataset, full_label_dataset, batch_size, "test")
+
+        print("Predicting...")
+        preds = classifier.predict_generator(generator, steps=int(len(feature_dataset)/batch_size))
 
         try:
             print("Feature dataset: "+str(feature_dataset.shape))
@@ -556,13 +561,15 @@ class Classifier(ABC):
         except Exception as ex:
             pass
 
-
         #gets actual labels
+        # new_generator = self.create_data_generator(feature_dataset, full_label_dataset, 1, "test")
         X_images, y_non_category = generator.get_processed_images(start=0, end=len(feature_dataset))
         #gets predicted labels
         y_predict_non_category = [ t>0.5 for t in preds]
 
-
+        # print("Preds: "+str(preds.shape))
+        # print("y_actual: "+str(y_non_category.shape))
+        # print("y_predictions: "+str(np.array(y_predict_non_category).shape))
 
         return self.statistical_analysis(y_non_category, y_predict_non_category, verbose)
 
@@ -1380,27 +1387,85 @@ class Classifier(ABC):
 
 
 
-    #performs predictions and subsequent statistic calculations on unofficial test dataset
-    @abstractmethod
-    def test(self, model_arch="cnn", dataset_size=100):
+    """
+    Takes in the file path to a saved h5 model, 
+    then returns results from the model's predictions on a portion of the test dataset
+    """
+    def test_model(self, model_path="", dataset_size=100, verbose=False):
         max_images = dataset_size
         X = self.get_processed_image_paths(dataset_type="test", balanced=False, max_num=max_images)
+        #reads train labels, because the "test" dataset was part of the train dataset
         Y = self.data_handler.read_train_labels() #don't limit, because will use this for finding masks to train_dicom_paths
+
+        print("Retrieved processed image paths: "+str(len(X)))
 
 
 
         #loads the model
         try:
-            classifier = load_model("./trained_models/"+str(self.get_model_arch_filename_prefix(model_arch))+"_model.h5", 
-                                    custom_objects={'dice_coef_loss': self.dice_coef_loss, 'dice_coef': self.dice_coef})
+            classifier = load_model(model_path, 
+                                    custom_objects = {'dice_coef_loss': self.dice_coef_loss, 
+                                                        'dice_coef': self.dice_coef}
+                                    )
         except Exception as error:
             print(error)
-            print("Model doesn't exist for "+str(model_arch))
-            return
+            print("Model doesn't exist for "+str(model_path))
+            return {}
 
 
         #performs statistical analysis and returns the result
-        results = self.prediction_analysis(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=5, verbose=True)
+        results = self.prediction_analysis(classifier=classifier, feature_dataset=X, full_label_dataset=Y, batch_size=5, verbose=verbose)
+
+        return results
+
+
+    """
+    performs predictions and subsequent statistic calculations on unofficial test dataset
+    """
+    @abstractmethod
+    def test(self, project, classification_type, model_arch, date_to_retrieve, training_session_num, dataset_size):
+
+        training_session_path = self.data_handler.get_training_session_path(project, classification_type, model_arch, date_to_retrieve, training_session_num)
+
+        # print("Training session path: "+str(training_session_path))
+
+
+        file_list = os.listdir(training_session_path)
+
+        # for file in file_list:
+        #     print(file)
+        # print()
+
+
+        model_paths = []
+        statistical_results = []
+
+        # print()
+        # print("Saved models: ")
+        for file in file_list:
+            if ".h5" in file:
+                # print(file)
+                model_path = training_session_path+"/"+file
+                print("Model path: "+str(model_path))
+                model_paths.append(model_path)
+
+                stat_results = self.test_model(model_path=model_path, dataset_size=dataset_size, verbose=False)
+
+                # print("Stat results: "+str(stat_results[0]))
+                statistical_results.append(stat_results)
+        print()
+        print()
+
+
+
+        print("-- Results --")
+        for x in range(0, len(statistical_results)):
+            print("Model "+str(model_paths[x]))
+            self.print_statistical_measures(statistical_results[x][0][0])
+
+        print()
+
+
 
 
 
@@ -1727,6 +1792,7 @@ class BinaryClassifier(Classifier):
                         activity_regularizer=l1(activation_regularization), #regularizes activation to avoid overfitting
                         kernel_constraint=max_norm(weight_limit))
 
+
         inputs = Input((self.image_width, self.image_height, 1))
         
         conv1 = create_conv_layer(start_size*1)(inputs)
@@ -1818,32 +1884,8 @@ class BinaryClassifier(Classifier):
         super().train_evaluate(classification_type="binary", model_arch=model_arch, training_type=training_type)
 
 
-    def test(self, model_arch):
-
-        print()
-        print("You can find the model you want to test by specifying a date and training session number.")
-        print()
-        print("Training session dates available:")
-
-        training_session_dates = self.data_handler.get_training_session_dates(project=self.project, classification_type="binary", model_arch=model_arch)
-
-        for x in range(0, len(training_session_dates)):
-            date = training_session_dates[x]
-            #if today, print it special
-            if date == self.data_handler.get_today():
-                print("  "+str(x+1)+") "+str(training_session_dates[x])+" (today)")
-            else:
-                print("  "+str(x+1)+") "+str(training_session_dates[x]))
-        print()
-        date_index = int(input("Choice: "))
-
-        while date_index<0 or date_index>len(training_session_dates):
-            print("Incorrect choice, please choose a number in the list. ")
-            date_index = int(input("Choice: "))
-
-        print("Date chosen: "+str(training_session_dates[date_index-1]))
-
-        print(" -- To be implemented later --")
+    def test(self, project, model_arch, date_to_retrieve, training_session_num, dataset_size):
+        super().test(project, "binary", model_arch, date_to_retrieve, training_session_num, dataset_size)
 
 
 

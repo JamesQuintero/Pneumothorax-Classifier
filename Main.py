@@ -42,8 +42,11 @@ class Main:
         print()
         print("-- Menu --")
         print("1) Preprocess scans")
-        print("2) Train/Test model")
-        print("3) View Train/Test results")
+        # print("2) Train/Test model")
+        # print("3) View Train/Test results")
+        print("2) Train model")
+        print("3) View Training results")
+        print("4) Test a trained model")
 
         print("0) Quit")
         choice = int(input("Choice: "))
@@ -54,10 +57,16 @@ class Main:
             self.preprocess()
         #Train/Test models
         elif choice==2:
-            self.classifier()
+            # self.classifier()
+            self.train_menu()
+
         #View Train/Test results
         elif choice==3:
             self.view_results()
+
+        #Test trained models
+        elif choice==4:
+            self.test_menu()
 
 
         #Quits the program
@@ -72,14 +81,14 @@ class Main:
 
 
     """
-    Classifier menu
+    Train model menu
     """
-    def classifier(self):
+    def train_menu(self):
 
         while True:
             print()
             print()
-            print("-- Classifier Menu --")
+            print("-- Train Menu --")
             print()
 
             classifier, classifier_type = self.initialize_classifier()
@@ -89,14 +98,6 @@ class Main:
             print()
 
 
-            model_building_step = self.get_model_building_step()
-            if model_building_step == "":
-                return
-
-
-            print()
-            
-
             model_arch = self.get_model_architecture()
             if model_arch == "":
                 return
@@ -105,23 +106,18 @@ class Main:
             print()
 
 
-            #user is training
-            if model_building_step == "train":
-                #ask if they want to modify hyperparameters
-                self.user_modify_hyperparameters(classifier_type, model_arch)
+            #ask if they want to modify hyperparameters
+            self.user_modify_hyperparameters(classifier_type, model_arch)
 
-                print()
+            print()
 
-                training_type = self.get_model_training_type()
-                if training_type == "":
-                    return
+            training_type = self.get_model_training_type()
+            if training_type == "":
+                return
 
 
-                classifier.train_evaluate(model_arch, training_type)
+            classifier.train_evaluate(model_arch, training_type)
 
-
-            elif model_building_step == "test":
-                classifier.test(model_arch)
 
             print()
             print()
@@ -239,7 +235,7 @@ class Main:
 
 
     """
-    View Train/Test results
+    View Train results
     """
     def view_results(self):
         # print()
@@ -262,14 +258,6 @@ class Main:
                 return
 
             print()
-
-
-            # model_building_step = self.get_model_building_step()
-            # if model_building_step == "":
-            #     return
-
-
-            # print()
             
 
             model_arch = self.get_model_architecture()
@@ -310,7 +298,66 @@ class Main:
                 date_to_retrieve = self.get_date(project, classifier_type, model_arch)
 
 
-        
+    """
+    Test a trained model menu
+    """
+    def test_menu(self):
+        project = "chest_radiograph"
+
+        while True:
+            print()
+            print()
+            print("-- Test Model Menu --")
+            print()
+
+            # classifier=0
+            # classifier_type, model_arch, date_to_retrieve = 0
+
+            classifier, classifier_type = self.initialize_classifier()
+            if classifier is None:
+                return
+
+            print()
+            
+
+            model_arch = self.get_model_architecture()
+            if model_arch == "":
+                return
+
+
+            print()
+
+
+
+            #gets current day
+            self.print_available_dates(project, classifier_type, model_arch)
+            date_to_retrieve = str(self.get_date(project, classifier_type, model_arch))
+
+
+            while date_to_retrieve!="-1":
+                print()
+
+                self.print_available_training_sessions(project, classifier_type, model_arch, date_to_retrieve)
+                training_session_num = self.get_training_session_num(project, classifier_type, model_arch, date_to_retrieve)
+                while training_session_num!=-1:
+
+                    dataset_size = int(input("Test dataset size: "))
+
+                    classifier.test(project, model_arch, date_to_retrieve, training_session_num, dataset_size)
+
+                    print()
+                    print()
+                    print()
+                    print()
+
+                    #asks user for a new training session number
+                    self.print_available_training_sessions(project, classifier_type, model_arch, date_to_retrieve)
+                    training_session_num = self.get_training_session_num(project, classifier_type, model_arch, date_to_retrieve)
+                
+                #asks user for a new date
+                self.print_available_dates(project, classifier_type, model_arch)
+                date_to_retrieve = str(self.get_date(project, classifier_type, model_arch))
+
 
 
 
@@ -399,7 +446,7 @@ class Main:
 
         return model_arch
 
-    #returns date object corresponding to user provided date
+    #returns datetime object corresponding to user provided date
     def get_date(self, project, classification_type, model_arch):
 
         prompt = "Date to view (YYYY-MM-DD, -1 to quit): "
