@@ -1746,115 +1746,188 @@ class SegmentationClassifier(Classifier):
     def __init__(self, project):
         super().__init__(project)
 
-    #creates CNN sculpted for segmentation classification
+    #creates CNN sculpted for binary classification
     def create_CNN(self):
-
         CNN_size = self.hyperparameters['segmentation']['cnn']['conv_layer_size']
-        pool_size = (self.hyperparameters['segmentation']['cnn']['pool_size'],self.hyperparameters['segmentation']['cnn']['pool_size'])
-        filter_size = (self.hyperparameters['segmentation']['cnn']['filter_size'],self.hyperparameters['segmentation']['cnn']['filter_size'])
-        conv_activation = self.hyperparameters['segmentation']['cnn']['conv_activation']
+        num_conv_layers = self.hyperparameters['segmentation']['cnn']['num_conv_layers']
+        pool_size = (self.hyperparameters['segmentation']['cnn']['pool_size'], self.hyperparameters['segmentation']['cnn']['pool_size'])
+        filter_size = (self.hyperparameters['segmentation']['cnn']['filter_size'], self.hyperparameters['segmentation']['cnn']['filter_size'])
+        CNN_activation = self.hyperparameters['segmentation']['cnn']['conv_activation']
         dense_activation = self.hyperparameters['segmentation']['cnn']['dense_activation']
         output_activation = self.hyperparameters['segmentation']['cnn']['output_activation']
-        dropout = self.hyperparameters['segmentation']['cnn']['dropout']
         loss = self.hyperparameters['segmentation']['cnn']['loss']
         optimizer = self.hyperparameters['segmentation']['cnn']['optimizer']
+        last_layer_size = self.hyperparameters['segmentation']['cnn']['last_layer_size']
+        dropout = self.hyperparameters['segmentation']['cnn']['dropout']
+        weight_regularization = self.hyperparameters['segmentation']['cnn']['weight_regularization']
+        activation_regularization = self.hyperparameters['segmentation']['cnn']['activation_regularization']
+        weight_limit = self.hyperparameters['segmentation']['cnn']['weight_limit']
+        noise_amount = self.hyperparameters['segmentation']['cnn']['noise_std']
+        batch_normalization = self.hyperparameters['segmentation']['cnn']['batch_normalization']
 
         if loss=="dice_coef_loss":
             loss = self.dice_coef_loss
 
-        if optimizer=="adam":
-            optimizer = Adam(lr=1e-5)
+        metrics = self.dice_coef
 
 
 
 
-        # Initialising the CNN
         classifier = Sequential()
 
-        # classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
 
-        # # Step 2 - Pooling
-        # #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
-        # #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
-        # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
-
-        # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
-
-        # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
-
-        # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # classifier.add(BatchNormalization(axis=3))
-        # classifier.add(Dropout(0.25))
-
-        # # # Adding a second convolutional layer
-        # # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
-        # # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # # classifier.add(BatchNormalization(axis=3))
-        # # classifier.add(Dropout(0.25))
-
-        # # # Adding a second convolutional layer
-        # # classifier.add(Convolution2D(CNN_size, filter_size, activation = CNN_activation))
-        # # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # classifier.add(Dropout(0.25))
-
-        # # Adding a second convolutional layer
-        # classifier.add(Convolution2D(1, (1,1), activation = output_activation))
-        # # classifier.add(MaxPooling2D(pool_size = pool_size))
-        # # classifier.add(Dropout(0.25))
-
-        # classifier.compile(optimizer = 'adam', loss=self.dice_coef_loss, metrics=[self.dice_coef])
-
-        # classifier.summary()
-
-        # return classifier
+        # Step 2 - Pooling
+        #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
+        #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
 
 
+        classifier.add(Conv2D(CNN_size, filter_size, 
+                            input_shape = (self.image_width, self.image_height, 1), 
+                            padding="same", 
+                            kernel_initializer='he_uniform', #Initializes weights
+                            kernel_regularizer=l2(weight_regularization), #regularizes weights to avoid overfitting
+                            activity_regularizer=l1(activation_regularization), #regularizes activation to avoid overfitting
+                            kernel_constraint=max_norm(weight_limit))) #constrains weights to avoid exploding gradients
+        classifier.add(Activation(CNN_activation))
+
+        if batch_normalization:
+            classifier.add(BatchNormalization())
+
+        classifier.add(MaxPooling2D(pool_size = pool_size))
+
+        if noise_amount>0:
+            classifier.add(GaussianNoise(noise_amount)) #Adds noise
+
+        #add dropout if not using batch normalization
+        if not batch_normalization:
+            classifier.add(Dropout(dropout))
 
 
-        inputs = Input((self.image_width, self.image_height, 1))
-        conv1 = Conv2D(CNN_size , filter_size, activation=conv_activation, padding='same')(inputs)
-        pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
-        dropout1 = Dropout(dropout)(pool1)
+        #adds hidden convolutional layers
+        for x in range(1, num_conv_layers):
+            classifier.add(Conv2D(CNN_size, filter_size, 
+                                    padding="same", 
+                                    kernel_initializer='he_uniform', 
+                                    kernel_regularizer=l2(weight_regularization),
+                                    activity_regularizer=l1(activation_regularization),
+                                    kernel_constraint=max_norm(weight_limit)))
+            classifier.add(Activation(CNN_activation))
+            if batch_normalization:
+                classifier.add(BatchNormalization())
 
-        conv2 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout1)
-        pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
-        dropout2 = Dropout(dropout)(pool2)
+            classifier.add(MaxPooling2D(pool_size = pool_size))
 
-        conv3 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout2)
-        pool3 = MaxPooling2D(pool_size=pool_size)(conv3)
-        dropout3 = Dropout(dropout)(pool3)
+            # if batch_normalization:
+            if noise_amount > 0:
+                classifier.add(GaussianNoise(noise_amount)) #Adds noise
 
-        conv4 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout3)
-        pool4 = MaxPooling2D(pool_size=pool_size)(conv4)
-        dropout4 = Dropout(dropout)(pool4)
-
-        conv10 = Conv2D(1, (1, 1), activation=output_activation)(dropout4)
-        # conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
+            #add dropout if not using batch normalization
+            if not batch_normalization:
+                classifier.add(Dropout(dropout))
 
 
-        model = Model(inputs=inputs, outputs=conv10)
 
-        model.compile(optimizer=optimizer, loss=loss, metrics=[self.dice_coef])
+        # #flattents the layers
+        # classifier.add(Flatten())
+
+        # #128 is an arbitrary number that can be decreased to lower computation time, and increased for better accuracy
+        # classifier.add(Dense(units = last_layer_size, activation = dense_activation))
+        # if not batch_normalization:
+        #     classifier.add(Dropout(dropout))
+
+        # classifier.add(Dense(units = 1, activation = output_activation))
+
+        classifier.add(Conv2D(1, (1, 1), activation=output_activation))
+
+        classifier.compile(optimizer = optimizer, loss = loss, metrics = [metrics])
 
         print("Creating CNN")
-        model.summary()
+        classifier.summary()
 
-        return model
+        print()
+        print()
+        print("--- Unavailable ---")
+        print()
+
+        return classifier
+
+    # #creates CNN sculpted for segmentation classification
+    # def create_CNN(self):
+
+    #     CNN_size = self.hyperparameters['segmentation']['cnn']['conv_layer_size']
+    #     pool_size = (self.hyperparameters['segmentation']['cnn']['pool_size'],self.hyperparameters['segmentation']['cnn']['pool_size'])
+    #     filter_size = (self.hyperparameters['segmentation']['cnn']['filter_size'],self.hyperparameters['segmentation']['cnn']['filter_size'])
+    #     conv_activation = self.hyperparameters['segmentation']['cnn']['conv_activation']
+    #     dense_activation = self.hyperparameters['segmentation']['cnn']['dense_activation']
+    #     output_activation = self.hyperparameters['segmentation']['cnn']['output_activation']
+    #     dropout = self.hyperparameters['segmentation']['cnn']['dropout']
+    #     loss = self.hyperparameters['segmentation']['cnn']['loss']
+    #     optimizer = self.hyperparameters['segmentation']['cnn']['optimizer']
+
+    #     if loss=="dice_coef_loss":
+    #         loss = self.dice_coef_loss
+
+    #     if optimizer=="adam":
+    #         optimizer = Adam(lr=1e-5)
 
 
-    #creates and returns U-net architecture model specific for segmentation prediction
+
+
+    #     # Initialising the CNN
+    #     classifier = Sequential()
+
+    #     # classifier.add(Convolution2D(CNN_size, filter_size, input_shape = (self.image_width, self.image_height, 1), padding="same", activation = CNN_activation))
+
+    #     # # Step 2 - Pooling
+    #     # #pooling uses a 2x2 or something grid (most of the time is 2x2), goes over the feature maps, and the largest values as its going over become the values in the pooled map
+    #     # #slides with a stride of 2. At the end, the pool map should be (length/2)x(width/2)
+    #     # classifier.add(MaxPooling2D(pool_size = pool_size))
+    #     # # classifier.add(BatchNormalization(axis=3))
+    #     # classifier.add(Dropout(0.25))
+
+    #     # # Adding a second convolutional layer
+    #     # classifier.add(Convolution2D(CNN_size, filter_size, padding="same", activation = CNN_activation))
+    #     # classifier.add(MaxPooling2D(pool_size = pool_size))
+    #     # # classifier.add(BatchNormalization(axis=3))
+    #     # classifier.add(Dropout(0.25))
+
+
+
+
+    #     inputs = Input((self.image_width, self.image_height, 1))
+    #     conv1 = Conv2D(CNN_size , filter_size, activation=conv_activation, padding='same')(inputs)
+    #     pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
+    #     dropout1 = Dropout(dropout)(pool1)
+
+    #     conv2 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout1)
+    #     pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
+    #     dropout2 = Dropout(dropout)(pool2)
+
+    #     conv3 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout2)
+    #     pool3 = MaxPooling2D(pool_size=pool_size)(conv3)
+    #     dropout3 = Dropout(dropout)(pool3)
+
+    #     conv4 = Conv2D(CNN_size, filter_size, activation=conv_activation, padding='same')(dropout3)
+    #     pool4 = MaxPooling2D(pool_size=pool_size)(conv4)
+    #     dropout4 = Dropout(dropout)(pool4)
+
+    #     conv10 = Conv2D(1, (1, 1), activation=output_activation)(dropout4)
+    #     # conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
+
+
+    #     model = Model(inputs=inputs, outputs=conv10)
+
+    #     model.compile(optimizer=optimizer, loss=loss, metrics=[self.dice_coef])
+
+    #     print("Creating CNN")
+    #     model.summary()
+
+    #     return model
+
+
+    
+
+    #creates and returns U-net architecture model
     def create_Unet(self):
         start_size = self.hyperparameters['segmentation']['unet']['start_size']
         pool_size = (self.hyperparameters['segmentation']['unet']['pool_size'],self.hyperparameters['segmentation']['unet']['pool_size'])
@@ -1864,6 +1937,14 @@ class SegmentationClassifier(Classifier):
         loss = self.hyperparameters['segmentation']['unet']['loss']
         optimizer = self.hyperparameters['segmentation']['unet']['optimizer']
         last_layer_size = self.hyperparameters['segmentation']['unet']['last_layer_size']
+        batch_normalization = self.hyperparameters['segmentation']['unet']['batch_normalization']
+        depth = self.hyperparameters['segmentation']['unet']['depth']
+
+        dropout = self.hyperparameters['segmentation']['unet']['dropout']
+        weight_regularization = self.hyperparameters['segmentation']['unet']['weight_regularization']
+        activation_regularization = self.hyperparameters['segmentation']['unet']['activation_regularization']
+        weight_limit = self.hyperparameters['segmentation']['unet']['weight_limit']
+        noise_amount = self.hyperparameters['segmentation']['unet']['noise_std']
 
 
         if loss=="dice_coef_loss":
@@ -1873,149 +1954,81 @@ class SegmentationClassifier(Classifier):
             optimizer = Adam(lr=1e-5)
 
 
-        # inputs = Input((self.image_width, self.image_height, 1))
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
-        # pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
 
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(pool1)
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv2)
-        # pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
-
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool2)
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv3)
-        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
-        # pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
-
-        # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool4)
-        # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv5)
+        def create_conv_layer(size):
+            return Conv2D(size, 
+                        filter_size, 
+                        activation=conv_activation, 
+                        padding='same', 
+                        kernel_initializer='he_uniform', #Initializes weights
+                        kernel_regularizer=l2(weight_regularization), #regularizes weights to avoid overfitting
+                        activity_regularizer=l1(activation_regularization), #regularizes activation to avoid overfitting
+                        kernel_constraint=max_norm(weight_limit))
 
 
+        #returns tuple where 0th element is the convolutional layer, and the 1st is the pooling layer
+        def create_downscale_layer(size, prev_layer):
+            conv = create_conv_layer(size)(prev_layer)
+            conv = create_conv_layer(size)(conv)
+            if batch_normalization:
+                conv = BatchNormalization()(conv)
 
-        # # pool5 = MaxPooling2D(pool_size=(2, 2))(conv5)
+            pool = MaxPooling2D(pool_size=pool_size)(conv)
 
-        # # convdeep = Conv2D(1024, (3, 3), activation='relu', padding='same')(pool5)
-        # # convdeep = Conv2D(1024, (3, 3), activation='relu', padding='same')(convdeep)
-        
-        # # upmid = concatenate([Conv2D(512, (2, 2), activation='relu', padding='same')(UpSampling2D(size=(2, 2))(convdeep)), conv5], axis=1)
-        # # convmid = Conv2D(512, (3, 3), activation='relu', padding='same')(upmid)
-        # # convmid = Conv2D(512, (3, 3), activation='relu', padding='same')(convmid)
+            return conv, pool
 
+        #returns tuple where 0th element is the convolutinal layer, and the 1st is the upscale layer
+        def create_upscale_layer(size, prev_layer, level_layer):
+            up = concatenate([Conv2D(size, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(prev_layer)), level_layer], axis=3)
+            conv = create_conv_layer(size)(up)
+            conv = create_conv_layer(size)(conv)
+            if batch_normalization:
+                conv = BatchNormalization()(conv)
 
-
-
-        # up6 = concatenate([Conv2D(256, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv5)), conv4], axis=1)
-        # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(up6)
-        # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv6)
-
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
-
-        # up8 = concatenate([Conv2D(64, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv7)), conv2], axis=1)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(up8)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv8)
-
-        # up9 = concatenate([Conv2D(32, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv8)), conv1], axis=1)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(up9)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv9)
-
-        # conv10 = Convolution2D(1, (1, 1), activation='sigmoid')(conv9)
-        # # model = Model(input=inputs, output=conv10)
-
-
-
-
-
-
-        # inputs = Input((self.image_width, self.image_height, 1))
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
-        # pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
-
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(pool1)
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv2)
-        # pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
-
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool2)
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv3)
-        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
-        # # pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
-
-        # # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool4)
-        # # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv5)
-
-
-
-        # # up6 = concatenate([Conv2D(256, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv5)), conv4], axis=1)
-        # # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(up6)
-        # # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv6)
-
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
-
-        # up8 = concatenate([Conv2D(64, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv7)), conv2], axis=1)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(up8)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv8)
-
-        # up9 = concatenate([Conv2D(32, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv8)), conv1], axis=1)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(up9)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv9)
-
-        # conv10 = Convolution2D(1, (1, 1), activation='sigmoid')(conv9)
-        # # model = Model(input=inputs, output=conv10)
-
-
+            return conv, up
 
 
 
         inputs = Input((self.image_width, self.image_height, 1))
-        conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(inputs)
-        conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv1)
-        # conv1 = BatchNormalization()(conv1)
-        pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
+        
 
-        conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(pool1)
-        conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv2)
-        # conv2 = BatchNormalization()(conv2)
-        pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
-
-        conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
-        conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
-        # conv3 = BatchNormalization()(conv3)
-        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
-
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=3)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
-
-        up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
-        conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
-        conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv8)
-        # conv8 = BatchNormalization()(conv8)
-
-        up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=3)
-        conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(up9)
-        conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
-        # conv9 = BatchNormalization()(conv9)
-
-        conv10 = Conv2D(last_layer_size, (1, 1), activation=output_activation)(conv9)
-        # conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
+        
+        downscale_layers = [] #list of tuples of downscaling layers
+        upscale_layers = [] #list of tuples of upscaling layers
 
 
-        model = Model(inputs=inputs, outputs=conv10)
+        downscale_layers.append((inputs,inputs)) #adds the first layer
+
+        #If N = depth, there will be N downscaling layers and N-1 upscaling layers
+        for x in range(0, depth):
+            layer_size = start_size*(2**(x))
+            conv, pool = create_downscale_layer(layer_size, downscale_layers[-1][1])
+            downscale_layers.append((conv, pool))
+
+        #adds initial upscale layer, which is the previous downscale layer
+        upscale_layers.append(downscale_layers[-1])
+
+        #There will be depth-1 upscaling layers
+        for x in range(depth-1, 0, -1):
+            layer_size = start_size*(2**(x-1))
+            # print("Upscaling layer size: "+str(layer_size))
+            # print("x: "+str(x))
+            conv, pool = create_upscale_layer(layer_size, upscale_layers[-1][0], downscale_layers[x][0])
+            upscale_layers.append((conv, pool))
+            # print()
+
+        last_conv, last_up = upscale_layers[-1]
+
+
+
+
+        conv_1d = Conv2D(last_layer_size, (1, 1), activation=output_activation)(last_conv)
+
+
+        model = Model(inputs=inputs, outputs=conv_1d)
 
         model.compile(optimizer=optimizer, loss=loss, metrics=[self.dice_coef])
+
 
         print("Creating u-net")
         model.summary()
@@ -2059,37 +2072,12 @@ class SegmentationClassifier(Classifier):
         super().train_evaluate(classification_type="segmentation", model_arch=model_arch, training_type=training_type)
 
 
-
-    def test(self, model_arch):
-
-        print()
-        print("You can find the model you want to test by specifying a date and training session number.")
-        print()
-        print("Training session dates available:")
-
-        training_session_dates = self.data_handler.get_training_session_dates(project=self.project, classification_type="binary", model_arch=model_arch)
-
-        for x in range(0, len(training_session_dates)):
-            date = training_session_dates[x]
-            #if today, print it special
-            if date == self.data_handler.get_today():
-                print("  "+str(x+1)+") "+str(training_session_dates[x])+" (today)")
-            else:
-                print("  "+str(x+1)+") "+str(training_session_dates[x]))
-        print()
-        date_index = int(input("Choice: "))
-
-        while date_index<0 or date_index>len(training_session_dates):
-            print("Incorrect choice, please choose a number in the list. ")
-            date_index = int(input("Choice: "))
-
-        print("Date chosen: "+str(training_session_dates[date_index-1]))
-
-        print(" -- To be implemented later --")
+    def test(self, project, model_arch, date_to_retrieve, training_session_num, dataset_size):
+        super().test(project, "segmentation", model_arch, date_to_retrieve, training_session_num, dataset_size)
 
 
     def view_training_session_results(self, project, model_arch, date, session_num):
-        super().view_training_session_results(project, "binary", model_arch, date, session_num)
+        super().view_training_session_results(project, "segmentation", model_arch, date, session_num)
 
 
 
