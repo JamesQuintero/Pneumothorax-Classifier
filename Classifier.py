@@ -1580,6 +1580,9 @@ class BinaryClassifier(Classifier):
         return classifier
 
 
+
+
+
     #creates and returns U-net architecture model
     def create_Unet(self):
         start_size = self.hyperparameters['binary']['unet']['start_size']
@@ -1592,6 +1595,7 @@ class BinaryClassifier(Classifier):
         optimizer = self.hyperparameters['binary']['unet']['optimizer']
         last_layer_size = self.hyperparameters['binary']['unet']['last_layer_size']
         batch_normalization = self.hyperparameters['binary']['unet']['batch_normalization']
+        depth = self.hyperparameters['binary']['unet']['depth']
 
         dropout = self.hyperparameters['binary']['unet']['dropout']
         weight_regularization = self.hyperparameters['binary']['unet']['weight_regularization']
@@ -1608,180 +1612,6 @@ class BinaryClassifier(Classifier):
 
 
 
-
-
-
-        # inputs = Input((self.image_width, self.image_height, 1))
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
-        # pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
-
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(pool1)
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv2)
-        # pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
-
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool2)
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv3)
-        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
-        # pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
-
-        # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool4)
-        # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv5)
-
-
-
-        # # pool5 = MaxPooling2D(pool_size=(2, 2))(conv5)
-
-        # # convdeep = Conv2D(1024, (3, 3), activation='relu', padding='same')(pool5)
-        # # convdeep = Conv2D(1024, (3, 3), activation='relu', padding='same')(convdeep)
-        
-        # # upmid = concatenate([Conv2D(512, (2, 2), activation='relu', padding='same')(UpSampling2D(size=(2, 2))(convdeep)), conv5], axis=1)
-        # # convmid = Conv2D(512, (3, 3), activation='relu', padding='same')(upmid)
-        # # convmid = Conv2D(512, (3, 3), activation='relu', padding='same')(convmid)
-
-
-
-
-        # up6 = concatenate([Conv2D(256, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv5)), conv4], axis=1)
-        # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(up6)
-        # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv6)
-
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
-
-        # up8 = concatenate([Conv2D(64, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv7)), conv2], axis=1)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(up8)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv8)
-
-        # up9 = concatenate([Conv2D(32, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv8)), conv1], axis=1)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(up9)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv9)
-
-        # conv10 = Convolution2D(1, (1, 1), activation='sigmoid')(conv9)
-        # # model = Model(input=inputs, output=conv10)
-
-
-
-
-
-
-        # inputs = Input((self.image_width, self.image_height, 1))
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
-        # conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
-        # pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
-
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(pool1)
-        # conv2 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv2)
-        # pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
-
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool2)
-        # conv3 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv3)
-        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
-        # # pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
-
-        # # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool4)
-        # # conv5 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv5)
-
-
-
-        # # up6 = concatenate([Conv2D(256, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv5)), conv4], axis=1)
-        # # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(up6)
-        # # conv6 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv6)
-
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=1)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
-
-        # up8 = concatenate([Conv2D(64, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv7)), conv2], axis=1)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(up8)
-        # conv8 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv8)
-
-        # up9 = concatenate([Conv2D(32, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv8)), conv1], axis=1)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(up9)
-        # conv9 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv9)
-
-        # conv10 = Convolution2D(1, (1, 1), activation='sigmoid')(conv9)
-        # # model = Model(input=inputs, output=conv10)
-
-
-        
-
-
-
-
-
-        # inputs = Input((self.image_width, self.image_height, 1))
-        
-        # conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(inputs)
-        # conv1 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv1)
-        # if batch_normalization:
-        #     conv1 = BatchNormalization()(conv1)
-
-        # pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
-
-        # conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(pool1)
-        # conv2 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv2)
-        # if batch_normalization:
-        #     conv2 = BatchNormalization()(conv2)
-        # pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
-
-        # conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(pool2)
-        # conv3 = Conv2D(start_size*4, filter_size, activation=conv_activation, padding='same')(conv3)
-        # if batch_normalization:
-        #     conv3 = BatchNormalization()(conv3)
-        # # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-        # # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
-
-        # # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=3)
-        # # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
-
-        # up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
-        # conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(up8)
-        # conv8 = Conv2D(start_size*2, filter_size, activation=conv_activation, padding='same')(conv8)
-        # if batch_normalization:
-        #     conv8 = BatchNormalization()(conv8)
-
-        # up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=3)
-        # conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(up9)
-        # conv9 = Conv2D(start_size*1, filter_size, activation=conv_activation, padding='same')(conv9)
-        # if batch_normalization:
-        #     conv9 = BatchNormalization()(conv9)
-
-        # # conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
-
-        # conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
-        # # model = Model(inputs=inputs, outputs=conv10)
-
-
-        # dense1 = Flatten()(conv10)
-        # dense1 = Dense(units = last_layer_size, activation = dense_activation)(dense1)
-
-        # dense2 = Dense(units = 1, activation = output_activation)(dense1)
-        # dense2 = Dropout(dropout)(dense2)
-
-        
-        # model = Model(inputs=inputs, outputs=dense2)
-
-        # # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])
-        # model.compile(optimizer=optimizer, loss=loss, metrics=["accuracy"])
-
-        # print("Creating u-net")
-        # model.summary()
-
-
-
-
-
         def create_conv_layer(size):
             return Conv2D(size, 
                         filter_size, 
@@ -1793,59 +1623,71 @@ class BinaryClassifier(Classifier):
                         kernel_constraint=max_norm(weight_limit))
 
 
+        #returns tuple where 0th element is the convolutional layer, and the 1st is the pooling layer
+        def create_downscale_layer(size, prev_layer):
+            conv = create_conv_layer(size)(prev_layer)
+            conv = create_conv_layer(size)(conv)
+            if batch_normalization:
+                conv = BatchNormalization()(conv)
+
+            pool = MaxPooling2D(pool_size=pool_size)(conv)
+
+            return conv, pool
+
+        #returns tuple where 0th element is the convolutinal layer, and the 1st is the upscale layer
+        def create_upscale_layer(size, prev_layer, level_layer):
+            up = concatenate([Conv2D(size, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(prev_layer)), level_layer], axis=3)
+            conv = create_conv_layer(size)(up)
+            conv = create_conv_layer(size)(conv)
+            if batch_normalization:
+                conv = BatchNormalization()(conv)
+
+            return conv, up
+
+
+
         inputs = Input((self.image_width, self.image_height, 1))
         
-        conv1 = create_conv_layer(start_size*1)(inputs)
-        conv1 = create_conv_layer(start_size*1)(conv1)
-        if batch_normalization:
-            conv1 = BatchNormalization()(conv1)
 
-        pool1 = MaxPooling2D(pool_size=pool_size)(conv1)
+        
+        downscale_layers = [] #list of tuples of downscaling layers
+        upscale_layers = [] #list of tuples of upscaling layers
 
-        conv2 = create_conv_layer(start_size*2)(pool1)
-        conv2 = create_conv_layer(start_size*2)(conv2)
-        if batch_normalization:
-            conv2 = BatchNormalization()(conv2)
-        pool2 = MaxPooling2D(pool_size=pool_size)(conv2)
 
-        conv3 = create_conv_layer(start_size*4)(pool2)
-        conv3 = create_conv_layer(start_size*4)(conv3)
-        if batch_normalization:
-            conv3 = BatchNormalization()(conv3)
-        # pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+        downscale_layers.append((inputs,inputs)) #adds the first layer
 
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool3)
-        # conv4 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv4)
+        #If N = depth, there will be N downscaling layers and N-1 upscaling layers
+        for x in range(0, depth):
+            layer_size = start_size*(2**(x))
+            conv, pool = create_downscale_layer(layer_size, downscale_layers[-1][1])
+            downscale_layers.append((conv, pool))
 
-        # up7 = concatenate([Conv2D(128, (2, 2),activation='relu', padding='same')(UpSampling2D(size=(2, 2))(conv6)), conv3], axis=3)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(up7)
-        # conv7 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv7)
+        #adds initial upscale layer, which is the previous downscale layer
+        upscale_layers.append(downscale_layers[-1])
 
-        up8 = concatenate([Conv2D(start_size*2, pool_size, activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv3)), conv2], axis=3)
-        conv8 = create_conv_layer(start_size*2)(up8)
-        conv8 = create_conv_layer(start_size*2)(conv8)
-        if batch_normalization:
-            conv8 = BatchNormalization()(conv8)
+        #There will be depth-1 upscaling layers
+        for x in range(depth-1, 0, -1):
+            layer_size = start_size*(2**(x-1))
+            # print("Upscaling layer size: "+str(layer_size))
+            # print("x: "+str(x))
+            conv, pool = create_upscale_layer(layer_size, upscale_layers[-1][0], downscale_layers[x][0])
+            upscale_layers.append((conv, pool))
+            # print()
 
-        up9 = concatenate([Conv2D(start_size*1, pool_size,activation=conv_activation, padding='same')(UpSampling2D(size=pool_size)(conv8)), conv1], axis=3)
-        conv9 = create_conv_layer(start_size*1)(up9)
-        conv9 = create_conv_layer(start_size*1)(conv9)
-        if batch_normalization:
-            conv9 = BatchNormalization()(conv9)
+        last_conv, last_up = upscale_layers[-1]
 
         # conv10 = Convolution2D(1, (1, 1), activation=output_activation)(conv9)
 
-        conv10 = Convolution2D(1, (1, 1), activation=conv_activation)(conv9)
-        # model = Model(inputs=inputs, outputs=conv10)
+        conv_1d = Convolution2D(1, (1, 1), activation=conv_activation)(last_conv)
 
 
-        dense1 = Flatten()(conv10)
+        #flattens the layers
+        dense1 = Flatten()(conv_1d)
         dense1 = Dense(units = last_layer_size, activation = dense_activation)(dense1)
-
         dense2 = Dense(units = 1, activation = output_activation)(dense1)
         dense2 = Dropout(dropout)(dense2)
 
-        
+        #joins the CNN with the dense layers
         model = Model(inputs=inputs, outputs=dense2)
 
         # model.compile(optimizer=Adam(lr=1e-5), loss=self.dice_coef_loss, metrics=[self.dice_coef])

@@ -39,7 +39,7 @@
             "conv_activation": "relu",
             "dataset_size": 50,
             "dense_activation": "selu",
-            "depth": 3,
+            "depth": 4,
             "dropout": 0,
             "epochs": 1,
             "filter_size": 3,
