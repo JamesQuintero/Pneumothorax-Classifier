@@ -37,11 +37,11 @@ class DICOMReader:
         self.data_handler = DataHandler()
 
 
-    #prints metadata of dicom file
+    """
+    prints metadata of dicom file
+    """
     def print_dcm_info(self, dicom_obj):
-        # print("Filename.........:", file_path)
         print("Storage type.....:", dicom_obj.SOPClassUID)
-        # print()
 
         pat_name = dicom_obj.PatientName
         display_name = pat_name.family_name + ", " + pat_name.given_name
@@ -60,14 +60,20 @@ class DICOMReader:
             if 'PixelSpacing' in dicom_obj:
                 print("Pixel spacing....:", dicom_obj.PixelSpacing)
 
-    #image should already by a 2D list of single value for grayscale
+
+
+    """
+    image should already by a 2D list of single value for grayscale
+    """
     def plot_pixel_array(self, image, figsize=(10,10)):
         plt.figure(figsize=figsize)
         plt.imshow(image, cmap=plt.cm.bone)
         plt.show()
 
 
-    #plots many of the DICOM images at once
+    """
+    plots many of the DICOM images at once
+    """
     def plot_many_images(self):
         start = 5   # Starting index of images
         num_img = 4 # Total number of images to show
@@ -151,8 +157,10 @@ class DICOMReader:
 
 
 
-    #plots dicom_pixels and mask_pixels
-    #dicom_pixels is a pixel_array
+    """
+    plots dicom_pixels and mask_pixels
+    dicom_pixels is a pixel_array
+    """
     def plot_dicom(self, dicom_pixels, mask_pixels):
         
         plt.figure(figsize=(10,10))
@@ -169,17 +177,22 @@ class DICOMReader:
         plt.show()
 
 
-    #returns list of paths that point to dicom training images
+    """
+    returns list of paths that point to dicom training images
+    """
     def load_dicom_train_paths(self):
         try:
-            train_fns = glob.glob(self.dicom_train_path+"/*/*/*.dcm")
+            # train_fns = glob.glob(self.dicom_train_path+"/*/*/*.dcm")
+            train_fns = glob.glob(self.dicom_train_path+"/*.dcm")
         except Exception as error:
             print("load_dicom_train_paths() error: "+str(error))
             return []
 
         return train_fns
 
-    #rerturns list of paths that point to filtered training images
+    """
+    rerturns list of paths that point to filtered training images
+    """
     def load_filtered_dicom_train_paths(self):
         try:
             train_fns = glob.glob(self.dicom_filtered_train_path+"/*png")
@@ -189,7 +202,9 @@ class DICOMReader:
 
         return train_fns
 
-    #returns list of paths that point to dicom training images
+    """
+    returns list of paths that point to dicom training images
+    """
     def load_dicom_test_paths(self):
         try:
             test_fns = glob.glob(self.dicom_test_path+"/*.dcm")
@@ -199,7 +214,9 @@ class DICOMReader:
 
         return test_fns
 
-    #rerturns list of paths that point to filtered training images
+    """
+    rerturns list of paths that point to filtered training images
+    """
     def load_filtered_dicom_test_paths(self):
         try:
             test_fns = glob.glob(self.dicom_filtered_test_path+"/*png")
@@ -210,7 +227,9 @@ class DICOMReader:
         return test_fns
 
 
-    #returns dicom object stored at path
+    """
+    returns dicom object stored at path
+    """
     def get_dicom_obj(self, path):
 
 
@@ -230,7 +249,9 @@ class DICOMReader:
             return None
 
 
-    #moves all dcm files from one dataset to the other, without the extra nested folders that causes problems on Windows
+    """
+    moves all dcm files from one dataset to the other, without the extra nested folders that causes problems on Windows
+    """
     def move_all_dcm_files(self, dataset_type_from, dataset_type_to):
 
         if dataset_type_from.lower() == "train":
@@ -255,8 +276,10 @@ class DICOMReader:
                 pass
 
 
+    """
+    extracts image_id from the file path
+    """
     def extract_image_id(self, path, ext="dcm"):
-        #extracts image_id from the file path
         try:
             return path.split('\\')[-1].replace("."+str(ext), "")
         except Exception as error:
@@ -277,4 +300,4 @@ if __name__=="__main__":
     dicom_reader = DICOMReader()
 
     # dicom_reader.display_masks()
-    dicom_reader.move_all_dcm_files("train", "test")
+    dicom_reader.move_all_dcm_files("train", "train")

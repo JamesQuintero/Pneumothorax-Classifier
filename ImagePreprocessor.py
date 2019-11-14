@@ -47,8 +47,10 @@ class ImagePreprocessor(ABC):
 
 
 
-    #normalized based off train data, then applies to validate and test data
-    #returns 4-tuple of normalized train, validate, and test, and scaler object for saving
+    """
+    normalized based off train data, then applies to validate and test data
+    returns 4-tuple of normalized train, validate, and test, and scaler object for saving
+    """
     def normalize_data(self, train, validate, test, scaler_type=None):
 
         #if normalizing to fit a distribution curve
@@ -57,12 +59,6 @@ class ImagePreprocessor(ABC):
         #if normalizing to be between 0 and 1
         elif scaler_type.lower() == "0_1_scaler":
             scaler = MinMaxScaler(feature_range=(0,1))
-
-
-        # train_normalized = train/255
-        # validate_normalized = validate/255
-        # test_normalized = test/255
-
 
 
         mean = np.mean(train)
@@ -76,11 +72,15 @@ class ImagePreprocessor(ABC):
 
         return train_normalized, validate_normalized, test_normalized, scaler
 
-    #normalizes single list of images
+    """
+    normalizes single list of images
+    """
     def normalize_data(self, images):
         return images/255
 
-    #applies gaussian blur to the provided image, and returns it
+    """
+    applies gaussian blur to the provided image, and returns it
+    """
     def apply_gaussian_blur(self, image, kernel_size=5, sigma=1):
         #cuts down image
         was_expanded = False
@@ -98,7 +98,9 @@ class ImagePreprocessor(ABC):
         return image_blurred
 
 
-    #source: https://github.com/FienSoP/canny_edge_detector
+    """
+    source: https://github.com/FienSoP/canny_edge_detector
+    """
     def gaussian_kernel(self, size, sigma=1):
         size = int(size) // 2
         x, y = np.mgrid[-size:size+1, -size:size+1]
@@ -106,7 +108,9 @@ class ImagePreprocessor(ABC):
         g =  np.exp(-((x**2 + y**2) / (2.0*sigma**2))) * normal
         return g
 
-    #Gradient detection (blackening)
+    """
+    Gradient detection (blackening)
+    """
     def sobel_filters(self, image):
         Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], np.float32)
         Ky = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], np.float32)
@@ -119,7 +123,9 @@ class ImagePreprocessor(ABC):
         theta = np.arctan2(Iy, Ix)
         return (G, theta)
 
-    #thins out edges
+    """
+    thins out edges
+    """
     def non_max_suppression(self, gradient_matrix, theta_matrix):
         M, N = gradient_matrix.shape
         Z = np.zeros((M,N), dtype=np.int32)
@@ -161,7 +167,9 @@ class ImagePreprocessor(ABC):
 
         return Z
 
-    #only considers important edges
+    """
+    only considers important edges
+    """
     def threshold(self, image, strong_pixel=255, weak_pixel=75, high_threshold=0.15, low_threshold=0.05):
 
         # high_threshold = 0.15
@@ -210,13 +218,17 @@ class ImagePreprocessor(ABC):
         return img
 
 
-    #each image is a 2D array of 8-bit values, so account for overflow
+    """
+    each image is a 2D array of 8-bit values, so account for overflow
+    """
     def subtract_images(self, image1, image2):
         return cv2.subtract(image1, image2)
 
 
-    #applies canny edge detector to the image as the preprocessing step
-    #source: https://github.com/FienSoP/canny_edge_detector
+    """
+    applies canny edge detector to the image as the preprocessing step
+    source: https://github.com/FienSoP/canny_edge_detector
+    """
     @abstractmethod
     def canny_edge_detector(self, image, kernel_size=5, sigma=1, strong_pixel=255, weak_pixel=75, high_threshold=0.15, low_threshold=0.05):
         #blurs image
@@ -241,7 +253,9 @@ class ImagePreprocessor(ABC):
 
         # return non_max_image
 
-    #reduces noise in an image by blurring
+    """
+    reduces noise in an image by blurring
+    """
     def reduce_noise(self, image):
         try:
             return cv2.medianBlur(image,5)
@@ -249,7 +263,9 @@ class ImagePreprocessor(ABC):
             print("Error reducing noise in image.")
             return image
 
-    #perfdorms filtering on the 2D image
+    """
+    performs filtering on the 2D image
+    """
     @abstractmethod
     def edge_filter(self, image):
 
@@ -275,11 +291,13 @@ class ImagePreprocessor(ABC):
         return result
 
 
-    # https://stackoverflow.com/questions/3684484/peak-detection-in-a-2d-array/3689710#3689710
+    
     """
     Takes an array and detects the troughs using the local maximum or minimum filter depending on type
     Returns a boolean mask of the troughs (i.e. 1 when
     the pixel's value is the neighborhood maximum, 0 otherwise)
+
+    https://stackoverflow.com/questions/3684484/peak-detection-in-a-2d-array/3689710#3689710
     """
     def detect_local_extremas(self, array, threshold=5, filter_type="min"):
         # define an connected neighborhood
@@ -316,13 +334,17 @@ class ImagePreprocessor(ABC):
         return np.where(detected_minima)
 
 
-    #crops to focus on just the important parts of the radiograph
+    """
+    crops to focus on just the important parts of the radiograph
+    """
     @abstractmethod
     def crop(self, pixels):
         return pixels
 
 
-    #performs bulk preprocessing on training images
+    """
+    performs bulk preprocessing on training images
+    """
     def bulk_preprocessing(self, dataset_type="train", replace=True):
 
         if dataset_type.lower() == "train":
@@ -366,33 +388,7 @@ class ImagePreprocessor(ABC):
 
             pixels = self.preprocess(pixels)
 
-            self.dicom_reader.plot_pixel_array(pixels)
-
-
-
-
-
-            # kernel_size = 5
-            # sigma = 2
-            # strong_pixel = 255
-            # weak_pixel = 75
-            # high_threshold = 0.15
-            # low_threshold = 0.05
-
-            # # dcm_image = self.image_preprocessor.apply_gaussian_blur(dcm_image)
-            # new_dcm_image = self.image_preprocessor.canny_edge_detector(dcm_image, kernel_size, sigma, strong_pixel, weak_pixel, high_threshold, low_threshold)
-
-
-
-
-            #if the pixel data is reduced (e.g. a 512 x 512 image is collapsed to 256 x 256) then ds.Rows and ds.Columns should be set appropriately. 
-            #https://github.com/pydicom/pydicom/issues/738
-            # dicom_image.PixelData = dicom_image.pixel_array.tobytes()
-
-
-
-
-
+            # self.dicom_reader.plot_pixel_array(pixels)
 
 
             im = Image.fromarray(pixels)
@@ -401,7 +397,9 @@ class ImagePreprocessor(ABC):
             print("Preprocessed image "+str(i)+"/"+str(len(dicom_paths)))
 
 
-    #Preprocesses a single image
+    """
+    Preprocesses a single image
+    """
     @abstractmethod
     def preprocess(self, pixels):
         return pixels
@@ -651,7 +649,11 @@ class ChestRadiograph(ImagePreprocessor):
                 adding = 1
                 while x+adding<len(local_max) and local_max[x+adding]<middle:
                     adding+=1
-                bottom_ribs = local_max[x+adding]
+                try:
+                    bottom_ribs = local_max[x+adding]
+                except Exception as ex:
+                    pass
+
 
                 break
 
@@ -745,4 +747,4 @@ if __name__=="__main__":
 
     chest_xray = ChestRadiograph()
 
-    chest_xray.bulk_preprocessing("train", True)
+    chest_xray.bulk_preprocessing("train", False)

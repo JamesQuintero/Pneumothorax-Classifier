@@ -371,9 +371,6 @@ class DataHandler:
         mask= np.zeros(width* height)
         array = np.asarray([int(x) for x in rle.split()])
 
-        # print(mask)
-        # print("Array: "+str(array))
-
         starts = array[0::2]
         lengths = array[1::2]
 
@@ -385,10 +382,6 @@ class DataHandler:
             current_position += start
             mask[current_position:current_position+lengths[index]] = 255
             current_position += lengths[index]
-
-        # print("Mask :")
-        # for item in mask:
-        #     print(item)
 
         return mask.reshape(width, height)
 
@@ -405,16 +398,9 @@ class DataHandler:
 
         test_ratio = 1-train_ratio-validation_ratio
 
-        # print("Len: "+str(len(dataset)))
-        # print("Train ratio: "+str(train_ratio))
-        # print("Validation ratio: "+str(validation_ratio))
-        # print("Test ratio: "+str(test_ratio))
-
         train_cutoff = int(len(dataset)*train_ratio) 
         val_cutoff = int(len(dataset)*validation_ratio) + train_cutoff 
 
-        # print("train cutoff: "+str(train_cutoff))
-        # print("Validation cutoff: "+str(val_cutoff))
 
         if train_cutoff<=0:
             return [], [], []

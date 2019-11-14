@@ -25,8 +25,10 @@ class DataGenerator(keras.utils.Sequence):
     image_preprocessor = None
     augment = False
 
-    #passes in max number of images
-    #batch size is the number of items per batch
+    """
+    passes in max number of images
+    batch size is the number of items per batch
+    """
     def __init__(self, image_paths, labels, batch_size, label_type="binary", dim=(1024, 1024, 1), augment=False, shuffle=False):
         self.dim = dim
         self.image_paths = image_paths
@@ -40,15 +42,19 @@ class DataGenerator(keras.utils.Sequence):
         self.image_preprocessor = ChestRadiograph()
 
         ## For debugging ##
-        self.get_processed_images(0, batch_size)
+        # self.get_processed_images(0, batch_size)
     
-    #returns number of batches
+    """
+    returns number of batches
+    """
     def __len__(self):
         return int(np.ceil(len(self.image_paths) / float(self.batch_size)))
   
   
-    #loads processed images, and returns them in batch
-    #returns the index'th batch size amount of items
+    """
+    loads processed images, and returns them in batch
+    returns the index'th batch size amount of items
+    """
     def __getitem__(self, index):
 
         start = self.batch_size * index
@@ -59,7 +65,9 @@ class DataGenerator(keras.utils.Sequence):
         return batch_x, batch_y
 
 
-    #returns list of images and list of their corresponding labels
+    """
+    returns list of images and list of their corresponding labels
+    """
     def get_processed_images(self, start, end):
 
         image_height = self.dim[0]
@@ -131,14 +139,13 @@ class DataGenerator(keras.utils.Sequence):
         #normalize images
         X_train = self.image_preprocessor.normalize_data(X_train)
 
-        # print("X_train: "+str(X_train.shape))
-        # print("Y_train: "+str(Y_train.shape))
-        # input()
 
         return X_train, Y_train
 
 
-    #returns list containing original images and augmented (rotated, sheared, mirror, etc) images
+    """
+    returns list containing original images and augmented (rotated, sheared, mirror, etc) images
+    """
     def augment_images(self, images, labels):
         if self.augment==False:
             return images, labels
